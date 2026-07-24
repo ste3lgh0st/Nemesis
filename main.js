@@ -6,6 +6,19 @@ const loadEvents = require("./Loaders/loadEvents.js")
 const config = require("./config")
 const http = require('http');
 http.createServer((req, res) => res.end("Bot Mystical en ligne !")).listen(process.env.PORT || 3000);
+process.on('unhandledRejection', (reason, promise) => {
+    console.error(' [Anti-Crash] Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err, origin) => {
+    console.error(' [Anti-Crash] Uncaught Exception:', err);
+});
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end("Bot Mystical en ligne !");
+}).listen(PORT, () => {
+    console.log(`Serveur HTTP en écoute sur le port ${PORT}`);
+});
 
 bot.commands = new Discord.Collection()
 bot.color = "#0309e2";
