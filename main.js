@@ -4,6 +4,8 @@ const bot = new Discord.Client({intents})
 const loadCommands = require("./Loaders/loadCommands.js")
 const loadEvents = require("./Loaders/loadEvents.js")
 const config = require("./config")
+const http = require('http');
+http.createServer((req, res) => res.end("Bot Mystical en ligne !")).listen(process.env.PORT || 3000);
 
 bot.commands = new Discord.Collection()
 bot.color = "#0309e2";
