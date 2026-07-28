@@ -192,9 +192,8 @@ module.exports = async (bot, interaction) => {
             });
 
             try {
-                // On récupère le nom d'affichage Discord complet (ex: "[Lead] Eddie Van Halen")
+                // Pseudo Discord complet (ex: "{Acting Boss} Mr. Van Halen")
                 const nomDiscord = (interaction.member?.displayName || interaction.user.username).toLowerCase();
-                
                 const texteAbsence = `Du ${dateDebut} au ${dateFin}`;
 
                 const response = await sheets.spreadsheets.values.get({
@@ -204,14 +203,40 @@ module.exports = async (bot, interaction) => {
 
                 const rows = response.data.values;
                 if (rows) {
-                    const rowIndex = rows.findIndex(row => {
-                        if (!row[0]) return false;
+                    let meilleurIndex = -1;
+                    let meilleurScore = 0;
+
+                    rows.forEach((row, index) => {
+                        if (!row[0]) return;
+
                         const nomSheet = row[0].trim().toLowerCase();
-                        return nomDiscord.includes(nomSheet) || nomSheet.includes(nomDiscord);
+                        let scoreActuel = 0;
+
+                        // 1. Découpage en mots pour tester la correspondance par mot
+                        const motsSheet = nomSheet.split(/\s+/);
+                        motsSheet.forEach(mot => {
+                            // On ne compte que les mots de plus de 2 lettres pour éviter les faux positifs
+                            if (mot.length > 2 && nomDiscord.includes(mot)) {
+                                scoreActuel += mot.length; // Plus le mot commun est long, plus le score augmente !
+                            }
+                        });
+
+                        // 2. Si le nom complet est sous-chaine directe, gros bonus
+                        if (nomDiscord.includes(nomSheet) || nomSheet.includes(nomDiscord)) {
+                            scoreActuel += 20;
+                        }
+
+                        // On garde la ligne qui a le plus haut score
+                        if (scoreActuel > meilleurScore) {
+                            meilleurScore = scoreActuel;
+                            meilleurIndex = index;
+                        }
                     });
 
-                    if (rowIndex !== -1) {
-                        const targetRow = 4 + rowIndex;
+                    // Si on a trouvé au moins une correspondance valable (score > 0)
+                    if (meilleurIndex !== -1 && meilleurScore > 0) {
+                        const targetRow = 4 + meilleurIndex;
+                        const nomTrouve = rows[meilleurIndex][0];
 
                         await sheets.spreadsheets.values.update({
                             spreadsheetId: SPREADSHEET_ID,
@@ -221,9 +246,9 @@ module.exports = async (bot, interaction) => {
                                 values: [[texteAbsence]]
                             }
                         });
-                        console.log(`[Google Sheets] Absence ajoutée à la ligne ${targetRow} !`);
+                        console.log(`[Google Sheets] Absence ajoutée pour "${nomTrouve}" (Ligne ${targetRow}) avec un score de ${meilleurScore} !`);
                     } else {
-                        console.log(`[Google Sheets] Aucun nom du Sheet ne correspond au pseudo Discord : "${nomDiscord}"`);
+                        console.log(`[Google Sheets] Aucun nom ne correspond suffisamment au pseudo Discord : "${nomDiscord}"`);
                     }
                 }
             } catch (error) {
