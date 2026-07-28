@@ -180,79 +180,44 @@ module.exports = async (bot, interaction) => {
         const emetteurMention = interaction.user.toString();
 
         if (interaction.customId === "modal_absence") {
+            // Dit à Discord qu'on traite la demande (évite le bug des 3 secondes)
+            await interaction.deferReply();
+
             const dateDebut = interaction.fields.getTextInputValue("input_date_debut");
             const dateFin = interaction.fields.getTextInputValue("input_date_fin");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `${interaction.user}\nDate de début : ${dateDebut}\nDate de fin : ${dateFin}\nMotif : ${motif}`;
-
-            await interaction.reply({ 
-                content: template,
-                allowedMentions: { parse: ["users", "roles", "everyone"] }
-            });
+            const nomDiscord = interaction.member?.displayName || interaction.user.username;
+            const texteAbsence = `Du ${dateDebut} au ${dateFin}`;
+            const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1vD5SsRFLov-la8ntiEOO-qxW2cwcHpZyo6U0LUsRTqNABmgKMKJDhS/exec";
 
             try {
-                // Pseudo Discord complet (ex: "{Acting Boss} Mr. Van Halen")
-                const nomDiscord = (interaction.member?.displayName || interaction.user.username).toLowerCase();
-                const texteAbsence = `Du ${dateDebut} au ${dateFin}`;
-
-                const response = await sheets.spreadsheets.values.get({
-                    spreadsheetId: SPREADSHEET_ID,
-                    range: "A4:A20",
+                const response = await fetch(WEBHOOK_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        nomDiscord: nomDiscord,
+                        texteAbsence: texteAbsence
+                    })
                 });
 
-                const rows = response.data.values;
-                if (rows) {
-                    let meilleurIndex = -1;
-                    let meilleurScore = 0;
+                const resultText = await response.text();
 
-                    rows.forEach((row, index) => {
-                        if (!row[0]) return;
-
-                        const nomSheet = row[0].trim().toLowerCase();
-                        let scoreActuel = 0;
-
-                        // 1. Découpage en mots pour tester la correspondance par mot
-                        const motsSheet = nomSheet.split(/\s+/);
-                        motsSheet.forEach(mot => {
-                            // On ne compte que les mots de plus de 2 lettres pour éviter les faux positifs
-                            if (mot.length > 2 && nomDiscord.includes(mot)) {
-                                scoreActuel += mot.length; // Plus le mot commun est long, plus le score augmente !
-                            }
-                        });
-
-                        // 2. Si le nom complet est sous-chaine directe, gros bonus
-                        if (nomDiscord.includes(nomSheet) || nomSheet.includes(nomDiscord)) {
-                            scoreActuel += 20;
-                        }
-
-                        // On garde la ligne qui a le plus haut score
-                        if (scoreActuel > meilleurScore) {
-                            meilleurScore = scoreActuel;
-                            meilleurIndex = index;
-                        }
+                if (resultText === "OK") {
+                    const template = `${interaction.user}\nDate de début : ${dateDebut}\nDate de fin : ${dateFin}\nMotif : ${motif}`;
+                    await interaction.editReply({ 
+                        content: template,
+                        allowedMentions: { parse: ["users", "roles", "everyone"] }
                     });
-
-                    // Si on a trouvé au moins une correspondance valable (score > 0)
-                    if (meilleurIndex !== -1 && meilleurScore > 0) {
-                        const targetRow = 4 + meilleurIndex;
-                        const nomTrouve = rows[meilleurIndex][0];
-
-                        await sheets.spreadsheets.values.update({
-                            spreadsheetId: SPREADSHEET_ID,
-                            range: `B${targetRow}`,
-                            valueInputOption: "USER_ENTERED",
-                            requestBody: {
-                                values: [[texteAbsence]]
-                            }
-                        });
-                        console.log(`[Google Sheets] Absence ajoutée pour "${nomTrouve}" (Ligne ${targetRow}) avec un score de ${meilleurScore} !`);
-                    } else {
-                        console.log(`[Google Sheets] Aucun nom ne correspond suffisamment au pseudo Discord : "${nomDiscord}"`);
-                    }
+                } else {
+                    await interaction.editReply({ 
+                        content: `⚠️ Impossible de trouver une ligne correspondante à ton pseudo ("${nomDiscord}") dans le Google Sheet.` 
+                    });
                 }
-            } catch (error) {
-                console.error("Erreur lors de la mise à jour de Google Sheets :", error);
+
+            } catch (err) {
+                console.error("Erreur Webhook :", err);
+                await interaction.editReply({ content: "❌ Erreur lors de la communication avec le Google Sheet." });
             }
         }
 
