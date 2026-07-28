@@ -192,17 +192,23 @@ module.exports = async (bot, interaction) => {
             });
 
             try {
-                const nomMembre = interaction.member?.displayName || interaction.user.username;
-                const texteAbsence = `${dateDebut} au ${dateFin} (${motif})`;
+                // On récupère le nom d'affichage Discord complet (ex: "[Lead] Eddie Van Halen")
+                const nomDiscord = (interaction.member?.displayName || interaction.user.username).toLowerCase();
+                
+                const texteAbsence = `Du ${dateDebut} au ${dateFin}`;
 
                 const response = await sheets.spreadsheets.values.get({
                     spreadsheetId: SPREADSHEET_ID,
-                    range: "A4:B20",
+                    range: "A4:A20",
                 });
 
                 const rows = response.data.values;
                 if (rows) {
-                    const rowIndex = rows.findIndex(row => row[0] && row[0].toLowerCase() === nomMembre.toLowerCase());
+                    const rowIndex = rows.findIndex(row => {
+                        if (!row[0]) return false;
+                        const nomSheet = row[0].trim().toLowerCase();
+                        return nomDiscord.includes(nomSheet) || nomSheet.includes(nomDiscord);
+                    });
 
                     if (rowIndex !== -1) {
                         const targetRow = 4 + rowIndex;
@@ -215,6 +221,9 @@ module.exports = async (bot, interaction) => {
                                 values: [[texteAbsence]]
                             }
                         });
+                        console.log(`[Google Sheets] Absence ajoutée à la ligne ${targetRow} !`);
+                    } else {
+                        console.log(`[Google Sheets] Aucun nom du Sheet ne correspond au pseudo Discord : "${nomDiscord}"`);
                     }
                 }
             } catch (error) {
