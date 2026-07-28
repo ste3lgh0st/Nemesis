@@ -19,7 +19,7 @@ async function getTargetMember(guild, input) {
         try {
             return await guild.members.fetch(userIdMatch[0]);
         } catch (e) {
-            // Membre non trouvé par ID
+
         }
     }
 
@@ -34,7 +34,6 @@ async function getTargetMember(guild, input) {
 
 module.exports = async (bot, interaction) => {
 
-    // === 1. GESTION DES COMMANDES SLASH & COMMANDES CLASSIQUES ===
     if (interaction.isCommand() || interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
         try {
             const command = bot.commands?.get(interaction.commandName) || require(`../Commandes/${interaction.commandName}`);
@@ -51,7 +50,6 @@ module.exports = async (bot, interaction) => {
         return;
     }
 
-    // === 2. GESTION DES BOUTONS ===
     if (interaction.isButton()) {
         if (interaction.customId === "btn_absence") {
             const modal = new Discord.ModalBuilder()
@@ -144,7 +142,6 @@ module.exports = async (bot, interaction) => {
         }
     }
 
-    // === 3. GESTION DES MENUS DE SÉLECTION ===
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId.startsWith("select_coffre_")) {
             const actionType = interaction.customId.replace("select_coffre_", "");
@@ -179,25 +176,52 @@ module.exports = async (bot, interaction) => {
         }
     }
 
-    // === 4. GESTION DES SOUMISSIONS DE MODALS ===
     if (interaction.type === Discord.InteractionType.ModalSubmit) {
         const emetteurMention = interaction.user.toString();
 
-        // DECLARATION D'ABSENCE
         if (interaction.customId === "modal_absence") {
             const dateDebut = interaction.fields.getTextInputValue("input_date_debut");
             const dateFin = interaction.fields.getTextInputValue("input_date_fin");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# DÉCLARATION D'ABSENCE\n\n## MAFIA The Olympius Syndicate\n\n**Membre :** ${emetteurMention}\n\n**Date de début :** ${dateDebut}\n**Date de fin :** ${dateFin}\n\n**Motif :**\n${motif}\n\n*Pensez à prévenir votre supérieur direct si votre absence s'assortit d'une urgence RP.*`;
+            const template = `${interaction.user}\nDate de début : ${dateDebut}\nDate de fin : ${dateFin}\nMotif : ${motif}`;
 
             await interaction.reply({ 
                 content: template,
                 allowedMentions: { parse: ["users", "roles", "everyone"] }
             });
+
+            try {
+                const nomMembre = interaction.member?.displayName || interaction.user.username;
+                const texteAbsence = `${dateDebut} au ${dateFin} (${motif})`;
+
+                const response = await sheets.spreadsheets.values.get({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: "A4:B20",
+                });
+
+                const rows = response.data.values;
+                if (rows) {
+                    const rowIndex = rows.findIndex(row => row[0] && row[0].toLowerCase() === nomMembre.toLowerCase());
+
+                    if (rowIndex !== -1) {
+                        const targetRow = 4 + rowIndex;
+
+                        await sheets.spreadsheets.values.update({
+                            spreadsheetId: SPREADSHEET_ID,
+                            range: `B${targetRow}`,
+                            valueInputOption: "USER_ENTERED",
+                            requestBody: {
+                                values: [[texteAbsence]]
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error("Erreur lors de la mise à jour de Google Sheets :", error);
+            }
         }
 
-        // COFFRES (DÉPÔT / RETRAIT)
         if (interaction.customId.startsWith("modal_depot_") || interaction.customId.startsWith("modal_retrait_")) {
             try {
                 const isDepot = interaction.customId.startsWith("modal_depot_");
@@ -253,7 +277,6 @@ module.exports = async (bot, interaction) => {
             }
         }
 
-        // AVERTISSEMENTS
         if (interaction.customId.startsWith("modal_avertissement_")) {
             const level = interaction.customId.replace("modal_avertissement_", "");
             const membreInput = interaction.fields.getTextInputValue("input_membre");
@@ -287,7 +310,6 @@ module.exports = async (bot, interaction) => {
             });
         }
 
-        // CONVOCATION
         if (interaction.customId === "modal_convocation") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const heure = interaction.fields.getTextInputValue("input_heure");
@@ -312,7 +334,6 @@ module.exports = async (bot, interaction) => {
             });
         }
 
-        // SANCTION DISCIPLINAIRE
         if (interaction.customId === "modal_sanction") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const duree = interaction.fields.getTextInputValue("input_duree");
@@ -332,7 +353,6 @@ module.exports = async (bot, interaction) => {
             });
         }
 
-        // MORT RP / EXECUTION
         if (interaction.customId === "modal_mort_rp") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             let dateHeure = "";
@@ -358,7 +378,6 @@ module.exports = async (bot, interaction) => {
             });
         }
 
-        // BLACKLIST
         if (interaction.customId === "modal_blacklist") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const dureeInput = interaction.fields.getTextInputValue("input_duree").trim();
@@ -389,7 +408,6 @@ module.exports = async (bot, interaction) => {
             });
         }
 
-        // PROMOTION
         if (interaction.customId === "modal_promotion") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
@@ -408,7 +426,6 @@ module.exports = async (bot, interaction) => {
             });
         }
 
-        // PRIME
         if (interaction.customId === "modal_prime") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
