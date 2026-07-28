@@ -7,6 +7,10 @@ module.exports = {
   dm: false,
 
   async run(bot, message) {
+    if (message.deletable) {
+      await message.delete().catch(() => {});
+    }
+
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("btn_absence")

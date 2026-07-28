@@ -34,11 +34,11 @@ async function getTargetMember(guild, input) {
 
 module.exports = async (bot, interaction) => {
 
-    // === GESTION DES COMMANDES SLASH ===
-    if (interaction.type === Discord.InteractionType.ApplicationCommand) {
+    // === 1. GESTION DES COMMANDES SLASH & COMMANDES CLASSIQUES ===
+    if (interaction.isCommand() || interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
         try {
-            let command = require(`../Commandes/${interaction.commandName}`);
-            await command.run(bot, interaction, interaction.options);
+            const command = bot.commands?.get(interaction.commandName) || require(`../Commandes/${interaction.commandName}`);
+            if (command) await command.run(bot, interaction, interaction.options);
         } catch (err) {
             console.error(`Erreur lors de l'exécution de la commande ${interaction.commandName}:`, err);
             if (!interaction.replied && !interaction.deferred) {
@@ -48,11 +48,46 @@ module.exports = async (bot, interaction) => {
                 });
             }
         }
+        return;
     }
 
-    // === GESTION DES BOUTONS ===
+    // === 2. GESTION DES BOUTONS ===
     if (interaction.isButton()) {
-        if (interaction.customId === "action_depot" || interaction.customId === "action_retrait") {
+        if (interaction.customId === "btn_absence") {
+            const modal = new Discord.ModalBuilder()
+                .setCustomId("modal_absence")
+                .setTitle("Déclaration d'absence");
+
+            const inputDebut = new Discord.TextInputBuilder()
+                .setCustomId("input_date_debut")
+                .setLabel("Date de début")
+                .setPlaceholder("Ex: 15/08/2026")
+                .setStyle(Discord.TextInputStyle.Short)
+                .setRequired(true);
+
+            const inputFin = new Discord.TextInputBuilder()
+                .setCustomId("input_date_fin")
+                .setLabel("Date de fin")
+                .setPlaceholder("Ex: 20/08/2026")
+                .setStyle(Discord.TextInputStyle.Short)
+                .setRequired(true);
+
+            const inputMotif = new Discord.TextInputBuilder()
+                .setCustomId("input_motif")
+                .setLabel("Motif de l'absence")
+                .setPlaceholder("Raison de ton absence...")
+                .setStyle(Discord.TextInputStyle.Paragraph)
+                .setRequired(true);
+
+            modal.addComponents(
+                new Discord.ActionRowBuilder().addComponents(inputDebut),
+                new Discord.ActionRowBuilder().addComponents(inputFin),
+                new Discord.ActionRowBuilder().addComponents(inputMotif)
+            );
+
+            await interaction.showModal(modal);
+        } 
+        else if (interaction.customId === "action_depot" || interaction.customId === "action_retrait") {
             const actionType = interaction.customId === "action_depot" ? "depot" : "retrait";
 
             const selectMenu = new Discord.StringSelectMenuBuilder()
@@ -78,9 +113,8 @@ module.exports = async (bot, interaction) => {
                 components: [row],
                 flags: Discord.MessageFlags.Ephemeral
             });
-        }
-
-        if (interaction.customId.startsWith("warn_lvl_")) {
+        } 
+        else if (interaction.customId.startsWith("warn_lvl_")) {
             const level = interaction.customId.replace("warn_lvl_", "");
 
             const modal = new Discord.ModalBuilder()
@@ -110,7 +144,7 @@ module.exports = async (bot, interaction) => {
         }
     }
 
-    // === GESTION DES MENUS DE SÉLECTION ===
+    // === 3. GESTION DES MENUS DE SÉLECTION ===
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId.startsWith("select_coffre_")) {
             const actionType = interaction.customId.replace("select_coffre_", "");
@@ -145,9 +179,23 @@ module.exports = async (bot, interaction) => {
         }
     }
 
-    // === GESTION DES SOUMISSIONS DE MODALS ===
+    // === 4. GESTION DES SOUMISSIONS DE MODALS ===
     if (interaction.type === Discord.InteractionType.ModalSubmit) {
         const emetteurMention = interaction.user.toString();
+
+        // DECLARATION D'ABSENCE
+        if (interaction.customId === "modal_absence") {
+            const dateDebut = interaction.fields.getTextInputValue("input_date_debut");
+            const dateFin = interaction.fields.getTextInputValue("input_date_fin");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const template = `# DÉCLARATION D'ABSENCE\n\n## MAFIA The Olympius Syndicate\n\n**Membre :** ${emetteurMention}\n\n**Date de début :** ${dateDebut}\n**Date de fin :** ${dateFin}\n\n**Motif :**\n${motif}\n\n*Pensez à prévenir votre supérieur direct si votre absence s'assortit d'une urgence RP.*`;
+
+            await interaction.reply({ 
+                content: template,
+                allowedMentions: { parse: ["users", "roles", "everyone"] }
+            });
+        }
 
         // COFFRES (DÉPÔT / RETRAIT)
         if (interaction.customId.startsWith("modal_depot_") || interaction.customId.startsWith("modal_retrait_")) {
@@ -287,7 +335,6 @@ module.exports = async (bot, interaction) => {
         // MORT RP / EXECUTION
         if (interaction.customId === "modal_mort_rp") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
-            // Vérification : assure-toi que ton modal utilise bien 'input_date_heure' ou 'input_date'
             let dateHeure = "";
             try {
                 dateHeure = interaction.fields.getTextInputValue("input_date_heure");
