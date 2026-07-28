@@ -19,6 +19,7 @@ async function getTargetMember(guild, input) {
         try {
             return await guild.members.fetch(userIdMatch[0]);
         } catch (e) {
+            // Membre non trouvé par ID
         }
     }
 
@@ -33,11 +34,23 @@ async function getTargetMember(guild, input) {
 
 module.exports = async (bot, interaction) => {
 
+    // === GESTION DES COMMANDES SLASH ===
     if (interaction.type === Discord.InteractionType.ApplicationCommand) {
-        let command = require(`../Commandes/${interaction.commandName}`);
-        command.run(bot, interaction, interaction.options);
+        try {
+            let command = require(`../Commandes/${interaction.commandName}`);
+            await command.run(bot, interaction, interaction.options);
+        } catch (err) {
+            console.error(`Erreur lors de l'exécution de la commande ${interaction.commandName}:`, err);
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ 
+                    content: "Une erreur est survenue lors de l'exécution de cette commande.", 
+                    flags: Discord.MessageFlags.Ephemeral 
+                });
+            }
+        }
     }
 
+    // === GESTION DES BOUTONS ===
     if (interaction.isButton()) {
         if (interaction.customId === "action_depot" || interaction.customId === "action_retrait") {
             const actionType = interaction.customId === "action_depot" ? "depot" : "retrait";
@@ -97,6 +110,7 @@ module.exports = async (bot, interaction) => {
         }
     }
 
+    // === GESTION DES MENUS DE SÉLECTION ===
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId.startsWith("select_coffre_")) {
             const actionType = interaction.customId.replace("select_coffre_", "");
@@ -131,9 +145,11 @@ module.exports = async (bot, interaction) => {
         }
     }
 
+    // === GESTION DES SOUMISSIONS DE MODALS ===
     if (interaction.type === Discord.InteractionType.ModalSubmit) {
         const emetteurMention = interaction.user.toString();
 
+        // COFFRES (DÉPÔT / RETRAIT)
         if (interaction.customId.startsWith("modal_depot_") || interaction.customId.startsWith("modal_retrait_")) {
             try {
                 const isDepot = interaction.customId.startsWith("modal_depot_");
@@ -147,12 +163,8 @@ module.exports = async (bot, interaction) => {
                 const listeObjets = objetsRaw.split(",").map(item => item.trim());
                 const listeQuantites = quantitesRaw.split(",").map(item => item.trim());
 
-                if (!bot.inventaire) {
-                    bot.inventaire = { appli: {}, lead: {} };
-                }
-                if (!bot.inventaire[keyCoffre]) {
-                    bot.inventaire[keyCoffre] = {};
-                }
+                if (!bot.inventaire) bot.inventaire = { appli: {}, lead: {} };
+                if (!bot.inventaire[keyCoffre]) bot.inventaire[keyCoffre] = {};
 
                 let texteObjets = "";
                 for (let i = 0; i < listeObjets.length; i++) {
@@ -193,6 +205,7 @@ module.exports = async (bot, interaction) => {
             }
         }
 
+        // AVERTISSEMENTS
         if (interaction.customId.startsWith("modal_avertissement_")) {
             const level = interaction.customId.replace("modal_avertissement_", "");
             const membreInput = interaction.fields.getTextInputValue("input_membre");
@@ -206,7 +219,7 @@ module.exports = async (bot, interaction) => {
 
             if (targetMember) {
                 const roleId = ROLES_WARN[level];
-                if (roleId) await targetMember.roles.add(roleId).catch(err => console.error("Erreur ajout rôle :", err));
+                if (roleId) await targetMember.roles.add(roleId).catch(err => console.error("Erreur ajout rôle avertissement :", err));
             }
 
             let decisionTexte = "";
@@ -226,6 +239,7 @@ module.exports = async (bot, interaction) => {
             });
         }
 
+        // CONVOCATION
         if (interaction.customId === "modal_convocation") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const heure = interaction.fields.getTextInputValue("input_heure");
@@ -239,7 +253,7 @@ module.exports = async (bot, interaction) => {
             let memberMention = targetMember ? targetMember.toString() : membreInput;
 
             if (targetMember && ROLE_CONVOCATION) {
-                await targetMember.roles.add(ROLE_CONVOCATION).catch(err => console.error("Erreur ajout rôle :", err));
+                await targetMember.roles.add(ROLE_CONVOCATION).catch(err => console.error("Erreur ajout rôle convocation :", err));
             }
 
             const template = `# CONVOCATION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Convoqué par :** ${emetteurMention}\n\n**Date de la convocation :** ${dateFormatted}\n\n**Heure :** ${heure}\n\n**Lieu :** ${lieu}\n\n**Motif :**\n${motif}\n\nLa Direction de **The Olympius Syndicate** exige votre présence.\n\nVotre présence est obligatoire.\n\nToute absence injustifiée sera interprétée comme un manque de respect envers la Famille.\n\n**Cordialement,**\n<@&1508046852027842600>`;
@@ -250,6 +264,7 @@ module.exports = async (bot, interaction) => {
             });
         }
 
+        // SANCTION DISCIPLINAIRE
         if (interaction.customId === "modal_sanction") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const duree = interaction.fields.getTextInputValue("input_duree");
@@ -269,19 +284,26 @@ module.exports = async (bot, interaction) => {
             });
         }
 
+        // MORT RP / EXECUTION
         if (interaction.customId === "modal_mort_rp") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
-            const dateHeure = interaction.fields.getTextInputValue("input_date_heure");
+            // Vérification : assure-toi que ton modal utilise bien 'input_date_heure' ou 'input_date'
+            let dateHeure = "";
+            try {
+                dateHeure = interaction.fields.getTextInputValue("input_date_heure");
+            } catch {
+                dateHeure = interaction.fields.getTextInputValue("input_date");
+            }
             const motif = interaction.fields.getTextInputValue("input_motif");
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
 
             if (targetMember && ROLE_MORT_RP) {
-                await targetMember.roles.add(ROLE_MORT_RP).catch(err => console.error("Erreur ajout rôle :", err));
+                await targetMember.roles.add(ROLE_MORT_RP).catch(err => console.error("Erreur ajout rôle mort RP :", err));
             }
 
-            const template = `# EXECUTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Exécuter par :** ${emetteurMention}\n\n**Date et Heure du decès :** ${dateHeure}\n\n**Motif :**\n${motif}\n\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nQue cette mort de notre cousin évite encore d'autre\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# ÉXÉCUTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Exécuté par :** ${emetteurMention}\n\n**Date et Heure du décès :** ${dateHeure}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nQue la mort de notre membre serve d'exemple aux autres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
             await interaction.reply({ 
                 content: template,
@@ -289,6 +311,7 @@ module.exports = async (bot, interaction) => {
             });
         }
 
+        // BLACKLIST
         if (interaction.customId === "modal_blacklist") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const dureeInput = interaction.fields.getTextInputValue("input_duree").trim();
@@ -301,7 +324,7 @@ module.exports = async (bot, interaction) => {
             let memberMention = targetMember ? targetMember.toString() : membreInput;
 
             if (targetMember && ROLE_BLACKLIST) {
-                await targetMember.roles.add(ROLE_BLACKLIST).catch(err => console.error("Erreur ajout rôle :", err));
+                await targetMember.roles.add(ROLE_BLACKLIST).catch(err => console.error("Erreur ajout rôle blacklist :", err));
             }
 
             let dureeTexte = "";
@@ -319,6 +342,7 @@ module.exports = async (bot, interaction) => {
             });
         }
 
+        // PROMOTION
         if (interaction.customId === "modal_promotion") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
@@ -329,7 +353,7 @@ module.exports = async (bot, interaction) => {
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
 
-            const template = `# PROMOTION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté fournis de l'honneur de notre Famille.\n\nVotre fidélité nous prouve aujourd'hui que vous êtes capable de meilleur.\n\nRespectez cette décision et montrez que vous êtes méritant de cette place dans nos rangs.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# PROMOTION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu sa décision.\n\nVos actions ont fait honneur à notre Famille.\n\nVotre fidélité nous prouve aujourd'hui que vous êtes capable du meilleur.\n\nHonorez cette promotion et continuez à vous montrer digne de votre place parmi nous.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
             await interaction.reply({ 
                 content: template,
@@ -337,6 +361,7 @@ module.exports = async (bot, interaction) => {
             });
         }
 
+        // PRIME
         if (interaction.customId === "modal_prime") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
@@ -347,7 +372,7 @@ module.exports = async (bot, interaction) => {
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
 
-            const template = `# PRIME\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté fournis de l'honneur de notre Famille.\n\nVotre fidélité nous prouve aujourd'hui que vous êtes capable de meilleur.\n\nRespectez cette décision et montrez que vous êtes méritant de cette place dans nos rangs.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# PRIME DE RÉCOMPENSE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Accordée par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nLa Direction de **The Olympius Syndicate** tient à saluer vos récents efforts.\n\nVos services et votre loyauté envers la Famille méritent d'être récompensés à leur juste valeur.\n\nContinuez sur cette voie.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
             await interaction.reply({ 
                 content: template,
