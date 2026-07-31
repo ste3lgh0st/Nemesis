@@ -6,6 +6,7 @@ const ROLES_WARN = {
     3: "1472563147423482059"  
 };
 
+const ROLE_MEG = "1508213003743531199";
 const ROLE_BLACKLIST = "1529047916126142555";   
 const ROLE_CONVOCATION = "1508254552044998748";
 const ROLE_MORT_RP = "1508389958006865931";   
@@ -19,7 +20,7 @@ async function getTargetMember(guild, input) {
         try {
             return await guild.members.fetch(userIdMatch[0]);
         } catch (e) {
-
+            // Membre introuvable par ID
         }
     }
 
@@ -34,6 +35,7 @@ async function getTargetMember(guild, input) {
 
 module.exports = async (bot, interaction) => {
 
+    // --- 1. GESTION DES COMMANDES SLASH ---
     if (interaction.isCommand() || interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
         try {
             const command = bot.commands?.get(interaction.commandName) || require(`../Commandes/${interaction.commandName}`);
@@ -50,6 +52,7 @@ module.exports = async (bot, interaction) => {
         return;
     }
 
+    // --- 2. GESTION DES BOUTONS ---
     if (interaction.isButton()) {
         if (interaction.customId === "btn_absence") {
             const modal = new Discord.ModalBuilder()
@@ -92,16 +95,8 @@ module.exports = async (bot, interaction) => {
                 .setCustomId(`select_coffre_${actionType}`)
                 .setPlaceholder("Choisissez le coffre concerné...")
                 .addOptions([
-                    {
-                        label: "Coffre application",
-                        description: "Accéder au coffre Application",
-                        value: "appli"
-                    },
-                    {
-                        label: "Coffre lead",
-                        description: "Accéder au coffre Lead",
-                        value: "lead"
-                    }
+                    { label: "Coffre application", description: "Accéder au coffre Application", value: "appli" },
+                    { label: "Coffre lead", description: "Accéder au coffre Lead", value: "lead" }
                 ]);
 
             const row = new Discord.ActionRowBuilder().addComponents(selectMenu);
@@ -140,8 +135,10 @@ module.exports = async (bot, interaction) => {
 
             await interaction.showModal(modal);
         }
+        return;
     }
 
+    // --- 3. GESTION DES MENUS DEROULANTS ---
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId.startsWith("select_coffre_")) {
             const actionType = interaction.customId.replace("select_coffre_", "");
@@ -174,13 +171,17 @@ module.exports = async (bot, interaction) => {
 
             await interaction.showModal(modal);
         }
+        return;
     }
 
+    // --- 4. GESTION DES SOUMISSIONS DE MODALS ---
     if (interaction.type === Discord.InteractionType.ModalSubmit) {
         const emetteurMention = interaction.user.toString();
+        const today = new Date();
+        const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
+        // MODAL ABSENCE
         if (interaction.customId === "modal_absence") {
-            // Dit à Discord qu'on traite la demande (évite le bug des 3 secondes)
             await interaction.deferReply();
 
             const dateDebut = interaction.fields.getTextInputValue("input_date_debut");
@@ -195,10 +196,7 @@ module.exports = async (bot, interaction) => {
                 const response = await fetch(WEBHOOK_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        nomDiscord: nomDiscord,
-                        texteAbsence: texteAbsence
-                    })
+                    body: JSON.stringify({ nomDiscord, texteAbsence })
                 });
 
                 const resultText = await response.text();
@@ -214,18 +212,17 @@ module.exports = async (bot, interaction) => {
                         content: `⚠️ Impossible de trouver une ligne correspondante à ton pseudo ("${nomDiscord}") dans le Google Sheet.` 
                     });
                 }
-
             } catch (err) {
                 console.error("Erreur Webhook :", err);
                 await interaction.editReply({ content: "❌ Erreur lors de la communication avec le Google Sheet." });
             }
         }
 
-        if (interaction.customId.startsWith("modal_depot_") || interaction.customId.startsWith("modal_retrait_")) {
+        // MODAL COFFRE (DEPOT / RETRAIT)
+        else if (interaction.customId.startsWith("modal_depot_") || interaction.customId.startsWith("modal_retrait_")) {
             try {
                 const isDepot = interaction.customId.startsWith("modal_depot_");
                 const keyCoffre = interaction.customId.replace(isDepot ? "modal_depot_" : "modal_retrait_", "");
-
                 const nomCoffre = keyCoffre === "appli" ? "Coffre application" : "Coffre lead";
 
                 const objetsRaw = interaction.fields.getTextInputValue("input_objet");
@@ -276,13 +273,11 @@ module.exports = async (bot, interaction) => {
             }
         }
 
-        if (interaction.customId.startsWith("modal_avertissement_")) {
+        // MODAL AVERTISSEMENTS (WARN)
+        else if (interaction.customId.startsWith("modal_avertissement_")) {
             const level = interaction.customId.replace("modal_avertissement_", "");
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
-
-            const today = new Date();
-            const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
@@ -293,30 +288,38 @@ module.exports = async (bot, interaction) => {
             }
 
             let decisionTexte = "";
-            if (level === "1") {
-                decisionTexte = "☒ Premier avertissement\n☐ Deuxième avertissement \n☐ Dernier avertissement avant sanction";
-            } else if (level === "2") {
-                decisionTexte = "☐ Premier avertissement\n☒ Deuxième avertissement \n☐ Dernier avertissement avant sanction";
-            } else {
-                decisionTexte = "☐ Premier avertissement\n☐ Deuxième avertissement \n☒ Dernier avertissement avant sanction";
-            }
+            if (level === "1") decisionTexte = "☒ Premier avertissement\n☐ Deuxième avertissement \n☐ Dernier avertissement avant sanction";
+            else if (level === "2") decisionTexte = "☐ Premier avertissement\n☒ Deuxième avertissement \n☐ Dernier avertissement avant sanction";
+            else decisionTexte = "☐ Premier avertissement\n☐ Deuxième avertissement \n☒ Dernier avertissement avant sanction";
 
             const template = `# AVERTISSEMENT \n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAu sein de cette Famille, chaque décision est prise avec réflexion. Aujourd'hui, nous choisissons de vous laisser une occasion de prouver votre valeur.\n\nConsidérez cette décision comme une faveur, non comme une faiblesse.\n\nLe moindre nouvel écart entraînera des mesures plus sévères.\n\n**Décision :**\n${decisionTexte}\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-            await interaction.reply({ 
-                content: template,
-                allowedMentions: { parse: ["users", "roles", "everyone"] }
-            });
+            await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
         }
 
-        if (interaction.customId === "modal_convocation") {
+        // MODAL MISE EN GARDE
+        else if (interaction.customId === "modal_mise_en_garde") {
+            const membreInput = interaction.fields.getTextInputValue("input_membre");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const targetMember = await getTargetMember(interaction.guild, membreInput);
+            let memberMention = targetMember ? targetMember.toString() : membreInput;
+
+            if (targetMember && ROLE_MEG) {
+                await targetMember.roles.add(ROLE_MEG).catch(err => console.error("Erreur ajout rôle MEG :", err));
+            }
+
+            const template = `# MISE EN GARDE \n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Raison / Rappel :**\n${motif}\n\nLa discipline est le pilier de notre Famille. Ceci est un pré-avertissement formel afin de vous rappeler les règles de The Olympius Syndicate.\n\nPrenez ce rappel au sérieux pour éviter tout avertissement officiel (warn) ou sanction plus lourde.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+
+            await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+        }
+
+        // MODAL CONVOCATION
+        else if (interaction.customId === "modal_convocation") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const heure = interaction.fields.getTextInputValue("input_heure");
             const lieu = interaction.fields.getTextInputValue("input_lieu");
             const motif = interaction.fields.getTextInputValue("input_motif");
-
-            const today = new Date();
-            const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
@@ -327,32 +330,25 @@ module.exports = async (bot, interaction) => {
 
             const template = `# CONVOCATION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Convoqué par :** ${emetteurMention}\n\n**Date de la convocation :** ${dateFormatted}\n\n**Heure :** ${heure}\n\n**Lieu :** ${lieu}\n\n**Motif :**\n${motif}\n\nLa Direction de **The Olympius Syndicate** exige votre présence.\n\nVotre présence est obligatoire.\n\nToute absence injustifiée sera interprétée comme un manque de respect envers la Famille.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-            await interaction.reply({ 
-                content: template,
-                allowedMentions: { parse: ["users", "roles", "everyone"] }
-            });
+            await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
         }
 
-        if (interaction.customId === "modal_sanction") {
+        // MODAL SANCTION
+        else if (interaction.customId === "modal_sanction") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const duree = interaction.fields.getTextInputValue("input_duree");
             const motif = interaction.fields.getTextInputValue("input_motif");
-
-            const today = new Date();
-            const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
 
             const template = `# SANCTION DISCIPLINAIRE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\n**Durée de la sanction :**\n${duree}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nLa sanction prend effet immédiatement pour la durée indiquée ci-dessus.\n\nRespectez cette décision et montrez que vous méritez encore votre place parmi nous.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-            await interaction.reply({ 
-                content: template,
-                allowedMentions: { parse: ["users", "roles", "everyone"] }
-            });
+            await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
         }
 
-        if (interaction.customId === "modal_mort_rp") {
+        // MODAL MORT RP
+        else if (interaction.customId === "modal_mort_rp") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             let dateHeure = "";
             try {
@@ -371,19 +367,14 @@ module.exports = async (bot, interaction) => {
 
             const template = `# ÉXÉCUTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Exécuté par :** ${emetteurMention}\n\n**Date et Heure du décès :** ${dateHeure}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nQue la mort de notre membre serve d'exemple aux autres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-            await interaction.reply({ 
-                content: template,
-                allowedMentions: { parse: ["users", "roles", "everyone"] }
-            });
+            await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
         }
 
-        if (interaction.customId === "modal_blacklist") {
+        // MODAL BLACKLIST
+        else if (interaction.customId === "modal_blacklist") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const dureeInput = interaction.fields.getTextInputValue("input_duree").trim();
             const motif = interaction.fields.getTextInputValue("input_motif");
-
-            const today = new Date();
-            const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
@@ -401,46 +392,33 @@ module.exports = async (bot, interaction) => {
 
             const template = `# BLACKLIST\n\n## MAFIA The Olympius Syndicate\n\n**Nom de la personne :** ${memberMention}\n\n**Inscription décidée par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\n**Durée :**\n${dureeTexte}\n\nPar décision de la Direction, vous êtes inscrit sur la **Blacklist officielle de The Olympius Syndicate**.\n\nCette mesure vous interdit toute réintégration ou toute collaboration avec notre Famille pendant la durée indiquée.\n\nLa confiance ne se réclame pas. Elle se mérite.\n\nVotre dossier restera archivé au sein de nos registres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-            await interaction.reply({ 
-                content: template,
-                allowedMentions: { parse: ["users", "roles", "everyone"] }
-            });
+            await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
         }
 
-        if (interaction.customId === "modal_promotion") {
+        // MODAL PROMOTION
+        else if (interaction.customId === "modal_promotion") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
-
-            const today = new Date();
-            const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
 
             const template = `# PROMOTION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu sa décision.\n\nVos actions ont fait honneur à notre Famille.\n\nVotre fidélité nous prouve aujourd'hui que vous êtes capable du meilleur.\n\nHonorez cette promotion et continuez à vous montrer digne de votre place parmi nous.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-            await interaction.reply({ 
-                content: template,
-                allowedMentions: { parse: ["users", "roles", "everyone"] }
-            });
+            await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
         }
 
-        if (interaction.customId === "modal_prime") {
+        // MODAL PRIME
+        else if (interaction.customId === "modal_prime") {
             const membreInput = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
-
-            const today = new Date();
-            const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
 
             const template = `# PRIME DE RÉCOMPENSE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Accordée par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nLa Direction de **The Olympius Syndicate** tient à saluer vos récents efforts.\n\nVos services et votre loyauté envers la Famille méritent d'être récompensés à leur juste valeur.\n\nContinuez sur cette voie.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-            await interaction.reply({ 
-                content: template,
-                allowedMentions: { parse: ["users", "roles", "everyone"] }
-            });
+            await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
         }
     }
 };

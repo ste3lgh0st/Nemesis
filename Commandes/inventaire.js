@@ -1,4 +1,8 @@
 const Discord = require("discord.js");
+const fs = require("fs");
+const path = require("path");
+
+const inventairePath = path.join(__dirname, "../inventaire.json"); // Ajuste le chemin vers inventaire.json si besoin
 
 module.exports = {
     name: "inventaire",
@@ -20,17 +24,24 @@ module.exports = {
 
     async run(bot, message, args) {
         let typeCoffre = args.getString("coffre");
-        if (!bot.inventaire) {
-            bot.inventaire = { appli: {}, lead: {} };
+
+        // 📁 LECTURE DE L'INVENTAIRE DEPUIS LE FICHIER JSON
+        let inventaire = { appli: {}, lead: {} };
+        if (fs.existsSync(inventairePath)) {
+            try {
+                inventaire = JSON.parse(fs.readFileSync(inventairePath, "utf8"));
+            } catch (err) {
+                console.error("Erreur lecture inventaire.json :", err);
+            }
         }
 
-        let stocks = bot.inventaire[typeCoffre];
+        let stocks = inventaire[typeCoffre] || {};
         let nomCoffre = typeCoffre === "appli" ? "Coffre Application" : "Coffre Lead";
 
         let listeObjets = Object.keys(stocks);
 
         if (listeObjets.length === 0) {
-            return await message.reply({ content: `Le **${nomCoffre}** est actuellement vide.`, ephemeral: true });
+            return await message.reply({ content: `Le **${nomCoffre}** est actuellement vide.`, flags: Discord.MessageFlags.Ephemeral });
         }
 
         let texte = `**__Contenu du ${nomCoffre}__**\n\n`;
@@ -41,7 +52,7 @@ module.exports = {
         }
 
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
+            .setColor(bot.color || "#2b2d31")
             .setTitle(`Inventaire - ${nomCoffre}`)
             .setDescription(texte);
 
