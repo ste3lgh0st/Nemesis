@@ -11,6 +11,26 @@ const ROLE_BLACKLIST = "1529047916126142555";
 const ROLE_CONVOCATION = "1508254552044998748";
 const ROLE_MORT_RP = "1508389958006865931";   
 
+const WEBHOOK_SHEET_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1vD5SsRFLov-la8ntiEOO-qxW2cwcHpZyo6U0LUsRTqNABmgKMKJDhS/exec";
+
+// Fonction utilitaire pour envoyer les données au Google Sheet
+async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule }) {
+    if (!WEBHOOK_SHEET_URL || !nomDiscord) return;
+    try {
+        await fetch(WEBHOOK_SHEET_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                nomDiscord: nomDiscord,
+                texteAbsence: texteAbsence || null,
+                sanctionIntitule: sanctionIntitule || null
+            })
+        });
+    } catch (err) {
+        console.error("Erreur d'envoi vers Google Sheet :", err);
+    }
+}
+
 async function getTargetMember(guild, input) {
     if (!input) return null;
     const cleanInput = input.trim();
@@ -138,7 +158,7 @@ module.exports = async (bot, interaction) => {
         return;
     }
 
-    // --- 3. GESTION DES MENUS DEROULANTS ---
+    // --- 3. GESTION DES MENUS DÉROULANTS ---
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId.startsWith("select_coffre_")) {
             const actionType = interaction.customId.replace("select_coffre_", "");
@@ -189,33 +209,15 @@ module.exports = async (bot, interaction) => {
             const motif = interaction.fields.getTextInputValue("input_motif");
 
             const nomDiscord = interaction.member?.displayName || interaction.user.username;
-            const texteAbsence = `Du ${dateDebut} au ${dateFin}`;
-            const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1vD5SsRFLov-la8ntiEOO-qxW2cwcHpZyo6U0LUsRTqNABmgKMKJDhS/exec";
+            const texteAbsenceStr = `Du ${dateDebut} au ${dateFin}`;
 
-            try {
-                const response = await fetch(WEBHOOK_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ nomDiscord, texteAbsence })
-                });
+            await envoyerAuGoogleSheet(nomDiscord, { texteAbsence: texteAbsenceStr });
 
-                const resultText = await response.text();
-
-                if (resultText === "OK") {
-                    const template = `${interaction.user}\nDate de début : ${dateDebut}\nDate de fin : ${dateFin}\nMotif : ${motif}`;
-                    await interaction.editReply({ 
-                        content: template,
-                        allowedMentions: { parse: ["users", "roles", "everyone"] }
-                    });
-                } else {
-                    await interaction.editReply({ 
-                        content: `⚠️ Impossible de trouver une ligne correspondante à ton pseudo ("${nomDiscord}") dans le Google Sheet.` 
-                    });
-                }
-            } catch (err) {
-                console.error("Erreur Webhook :", err);
-                await interaction.editReply({ content: "❌ Erreur lors de la communication avec le Google Sheet." });
-            }
+            const template = `${interaction.user}\nDate de début : ${dateDebut}\nDate de fin : ${dateFin}\nMotif : ${motif}`;
+            await interaction.editReply({ 
+                content: template,
+                allowedMentions: { parse: ["users", "roles", "everyone"] }
+            });
         }
 
         // MODAL COFFRE (DEPOT / RETRAIT)
@@ -281,11 +283,15 @@ module.exports = async (bot, interaction) => {
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
+            let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
             if (targetMember) {
                 const roleId = ROLES_WARN[level];
                 if (roleId) await targetMember.roles.add(roleId).catch(err => console.error("Erreur ajout rôle avertissement :", err));
             }
+
+            let intituleSanction = level === "1" ? "1er avertissement" : level === "2" ? "2ème avertissement" : "Dernier avertissement";
+            await envoyerAuGoogleSheet(nomCible, { sanctionIntitule: intituleSanction });
 
             let decisionTexte = "";
             if (level === "1") decisionTexte = "☒ Premier avertissement\n☐ Deuxième avertissement \n☐ Dernier avertissement avant sanction";
@@ -304,10 +310,13 @@ module.exports = async (bot, interaction) => {
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
+            let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
             if (targetMember && ROLE_MEG) {
                 await targetMember.roles.add(ROLE_MEG).catch(err => console.error("Erreur ajout rôle MEG :", err));
             }
+
+            await envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Mise en garde" });
 
             const template = `# MISE EN GARDE \n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Raison / Rappel :**\n${motif}\n\nLa discipline est le pilier de notre Famille. Ceci est un pré-avertissement formel afin de vous rappeler les règles de The Olympius Syndicate.\n\nPrenez ce rappel au sérieux pour éviter tout avertissement officiel (warn) ou sanction plus lourde.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
@@ -323,10 +332,13 @@ module.exports = async (bot, interaction) => {
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
+            let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
             if (targetMember && ROLE_CONVOCATION) {
                 await targetMember.roles.add(ROLE_CONVOCATION).catch(err => console.error("Erreur ajout rôle convocation :", err));
             }
+
+            await envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Convoqué" });
 
             const template = `# CONVOCATION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Convoqué par :** ${emetteurMention}\n\n**Date de la convocation :** ${dateFormatted}\n\n**Heure :** ${heure}\n\n**Lieu :** ${lieu}\n\n**Motif :**\n${motif}\n\nLa Direction de **The Olympius Syndicate** exige votre présence.\n\nVotre présence est obligatoire.\n\nToute absence injustifiée sera interprétée comme un manque de respect envers la Famille.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
@@ -341,6 +353,9 @@ module.exports = async (bot, interaction) => {
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
+            let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+
+            await envoyerAuGoogleSheet(nomCible, { sanctionIntitule: `Sanction (${duree})` });
 
             const template = `# SANCTION DISCIPLINAIRE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\n**Durée de la sanction :**\n${duree}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nLa sanction prend effet immédiatement pour la durée indiquée ci-dessus.\n\nRespectez cette décision et montrez que vous méritez encore votre place parmi nous.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
@@ -360,10 +375,13 @@ module.exports = async (bot, interaction) => {
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
+            let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
             if (targetMember && ROLE_MORT_RP) {
                 await targetMember.roles.add(ROLE_MORT_RP).catch(err => console.error("Erreur ajout rôle mort RP :", err));
             }
+
+            await envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Mort RP" });
 
             const template = `# ÉXÉCUTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Exécuté par :** ${emetteurMention}\n\n**Date et Heure du décès :** ${dateHeure}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nQue la mort de notre membre serve d'exemple aux autres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
@@ -378,10 +396,13 @@ module.exports = async (bot, interaction) => {
 
             const targetMember = await getTargetMember(interaction.guild, membreInput);
             let memberMention = targetMember ? targetMember.toString() : membreInput;
+            let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
             if (targetMember && ROLE_BLACKLIST) {
                 await targetMember.roles.add(ROLE_BLACKLIST).catch(err => console.error("Erreur ajout rôle blacklist :", err));
             }
+
+            await envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Blacklist" });
 
             let dureeTexte = "";
             if (dureeInput.toLowerCase() === "permanente" || dureeInput.toLowerCase() === "perm") {
