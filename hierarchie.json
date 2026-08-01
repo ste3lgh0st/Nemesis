@@ -1,0 +1,84 @@
+{
+  "roles": [
+    {
+      "id": "1508212677011308664",
+      "nom": "Recrue",
+      "niveau": 1
+    },
+    {
+      "id": "1508382709377011782",
+      "nom": "Guetteur",
+      "niveau": 2
+    },
+    {
+      "id": "1528518653476212746",
+      "nom": "Aspirant",
+      "niveau": 3
+    },
+    {
+      "id": "1508212402187931698",
+      "nom": "Garde I",
+      "niveau": 4
+    },
+    {
+      "id": "1528518870879703140",
+      "nom": "Garde II",
+      "niveau": 5
+    },
+    {
+      "id": "1508207011131559986",
+      "nom": "Garde III",
+      "niveau": 6
+    },
+    {
+      "id": "1508201741785759864",
+      "nom": "Hoplite",
+      "niveau": 7
+    },
+    {
+      "id": "1528519587363295443",
+      "nom": "Hoplite confirmé",
+      "niveau": 8
+    },
+    {
+      "id": "1528519576533467217",
+      "nom": "Hoplite d'élite",
+      "niveau": 9
+    },
+    {
+      "id": "1508202237409624194",
+      "nom": "Stratège",
+      "niveau": 10
+    },
+    {
+      "id": "1508201806566527178",
+      "nom": "Prytane",
+      "niveau": 11
+    },
+    {
+      "id": "1508201845024227458",
+      "nom": "Conseiller",
+      "niveau": 12
+    },
+    {
+      "id": "1508203206323208273",
+      "nom": "Directeur général",
+      "niveau": 13
+    },
+    {
+      "id": "1508200049912316084",
+      "nom": "Street Boss",
+      "niveau": 14
+    },
+    {
+      "id": "1472568491545726997",
+      "nom": "Acting Boss",
+      "niveau": 15
+    },
+    {
+      "id": "1472567948970557747",
+      "nom": "Boss",
+      "niveau": 16
+    }
+  ]
+}
