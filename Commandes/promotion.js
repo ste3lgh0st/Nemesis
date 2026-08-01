@@ -14,7 +14,14 @@ module.exports = {
         const inputMembre = new Discord.TextInputBuilder()
             .setCustomId("input_membre")
             .setLabel("Membre promu")
-            .setPlaceholder("Ex: @Nom ou Pseudo")
+            .setPlaceholder("Ex: @Nom ou Pseudo RP")
+            .setStyle(Discord.TextInputStyle.Short)
+            .setRequired(true);
+
+        const inputGrade = new Discord.TextInputBuilder()
+            .setCustomId("input_grade")
+            .setLabel("Nouveau Grade")
+            .setPlaceholder("Ex: Sergent / Capitaine / Officier II")
             .setStyle(Discord.TextInputStyle.Short)
             .setRequired(true);
 
@@ -34,6 +41,7 @@ module.exports = {
 
         modal.addComponents(
             new Discord.ActionRowBuilder().addComponents(inputMembre),
+            new Discord.ActionRowBuilder().addComponents(inputGrade),
             new Discord.ActionRowBuilder().addComponents(inputEmetteur),
             new Discord.ActionRowBuilder().addComponents(inputMotif)
         );
