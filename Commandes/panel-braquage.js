@@ -37,7 +37,7 @@ module.exports = {
             new Discord.ButtonBuilder()
                 .setCustomId("btn_braquage_fleeca")
                 .setLabel("Fleeca")
-                .setStyle(Discord.ButtonStyle.Primary), // Bleu
+                .setStyle(Discord.ButtonStyle.Success), // Bleu
 
             new Discord.ButtonBuilder()
                 .setCustomId("btn_braquage_bijouterie")

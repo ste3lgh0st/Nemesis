@@ -669,66 +669,68 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId.startsWith("btn_braquage_")) {
-                const typeBraquage = interaction.customId.replace("btn_braquage_", "");
+            // DÉCLENCHEMENT DU MODAL VIA BOUTON
+else if (interaction.customId.startsWith("btn_braquage_")) {
+    const typeBraquage = interaction.customId.replace("btn_braquage_", "");
 
-                let titreModal = "Déclaration de Braquage";
-                if (typeBraquage === "atm") titreModal = "Braquage d'ATM";
-                else if (typeBraquage === "conteneur") titreModal = "Braquage de Conteneur";
-                else if (typeBraquage === "superette") titreModal = "Braquage de Supérette";
-                else if (typeBraquage === "fleeca") titreModal = "Braquage de Fleeca";
-                else if (typeBraquage === "bijouterie") titreModal = "Braquage de Bijouterie";
-                else if (typeBraquage === "banque_centrale") titreModal = "Braquage de Banque Centrale";
+    let titreModal = "Déclaration de Braquage";
+    if (typeBraquage === "atm") titreModal = "Braquage d'ATM";
+    else if (typeBraquage === "conteneur") titreModal = "Braquage de Conteneur";
+    else if (typeBraquage === "superette") titreModal = "Braquage de Supérette";
+    else if (typeBraquage === "fleeca") titreModal = "Braquage de Fleeca";
+    else if (typeBraquage === "bijouterie") titreModal = "Braquage de Bijouterie";
+    else if (typeBraquage === "banque_centrale") titreModal = "Braquage de Banque Centrale";
 
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId(`modal_braquage_${typeBraquage}`)
-                    .setTitle(titreModal);
+    const modal = new Discord.ModalBuilder()
+        .setCustomId(`modal_braquage_${typeBraquage}`)
+        .setTitle(titreModal);
 
-                const inputBraqueurs = new Discord.TextInputBuilder()
-                    .setCustomId("input_braqueurs")
-                    .setLabel("Braqueurs (mentions, pseudos ou IDs)")
-                    .setPlaceholder("Ex: @Membre1, @Membre2 ou nonop, alex")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+    const inputBraqueurs = new Discord.TextInputBuilder()
+        .setCustomId("input_braqueurs")
+        .setLabel("Braqueurs (mentions, pseudos ou IDs)")
+        .setPlaceholder("Ex: @Membre1, @Membre2 ou nonop, alex")
+        .setStyle(Discord.TextInputStyle.Short)
+        .setRequired(true);
 
-                const inputOtages = new Discord.TextInputBuilder()
-                    .setCustomId("input_otages")
-                    .setLabel("Nombre d'otages")
-                    .setPlaceholder("Ex: 3 (ou 0 si aucun)")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+    const inputOtages = new Discord.TextInputBuilder()
+        .setCustomId("input_otages")
+        .setLabel("Nombre d'otages")
+        .setPlaceholder("Ex: 3 (ou 0 si aucun)")
+        .setStyle(Discord.TextInputStyle.Short)
+        .setRequired(true);
 
-                const inputLieu = new Discord.TextInputBuilder()
-                    .setCustomId("input_lieu")
-                    .setLabel("Lieu")
-                    .setPlaceholder("Ex: Supérette Vinewood / Fleeca Legion Square")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+    const inputLieu = new Discord.TextInputBuilder()
+        .setCustomId("input_lieu")
+        .setLabel("Lieu")
+        .setPlaceholder("Ex: Supérette Vinewood / Fleeca Legion Square")
+        .setStyle(Discord.TextInputStyle.Short)
+        .setRequired(true);
 
-                const inputAutorisation = new Discord.TextInputBuilder()
-                    .setCustomId("input_autorisation")
-                    .setLabel("Autorisation donnée par (mention/pseudo)")
-                    .setPlaceholder("Ex: @Leader ou nonop")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+    const inputAutorisation = new Discord.TextInputBuilder()
+        .setCustomId("input_autorisation")
+        .setLabel("Autorisation donnée par (mention/pseudo)")
+        .setPlaceholder("Ex: @Leader ou nonop")
+        .setStyle(Discord.TextInputStyle.Short)
+        .setRequired(true);
 
-                const inputGain = new Discord.TextInputBuilder()
-                    .setCustomId("input_gain_et_coffre")
-                    .setLabel("Argent sale gagné & Transféré au coffre")
-                    .setPlaceholder("Ex: 150000$ | Oui (ou Non)")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+    const inputGain = new Discord.TextInputBuilder()
+        .setCustomId("input_gain_et_coffre")
+        .setLabel("Argent sale gagné & Transféré au coffre")
+        .setPlaceholder("Ex: 150000$ | Oui (ou Non)")
+        .setStyle(Discord.TextInputStyle.Short)
+        .setRequired(true);
 
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputBraqueurs),
-                    new Discord.ActionRowBuilder().addComponents(inputOtages),
-                    new Discord.ActionRowBuilder().addComponents(inputLieu),
-                    new Discord.ActionRowBuilder().addComponents(inputAutorisation),
-                    new Discord.ActionRowBuilder().addComponents(inputGain)
-                );
+    modal.addComponents(
+        new Discord.ActionRowBuilder().addComponents(inputBraqueurs),
+        new Discord.ActionRowBuilder().addComponents(inputOtages),
+        new Discord.ActionRowBuilder().addComponents(inputLieu),
+        new Discord.ActionRowBuilder().addComponents(inputAutorisation),
+        new Discord.ActionRowBuilder().addComponents(inputGain)
+    );
 
-                await interaction.showModal(modal);
-            }
+    // Ne PAS mettre de deferReply() ou deferUpdate() avant cette ligne !
+    await interaction.showModal(modal);
+}
 
             // MODAL DÉCLARATION BRAQUAGE
             else if (interaction.customId.startsWith("modal_braquage_")) {
