@@ -15,68 +15,72 @@ const ROLE_MORT_RP = "1508389958006865931";
 const WEBHOOK_SHEET_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1vD5SsRFLov-la8ntiEOO-qxW2cwcHpZyo6U0LUsRTqNABmgKMKJDhS/exec";
 
 const COLUMN_MAPPING = {
-    'pacific': 'D',
+    'pacific bank': 'D',
+    'banque centrale': 'D',
     'bijouterie': 'E',
     'flecca': 'F',
+    'supérettes': 'G',
     'superette': 'G',
+    'conteneurs': 'H',
     'conteneur': 'H',
     'atm': 'I'
 };
 
 async function updateHeistStats(sheets, spreadsheetId, participants, heistType) {
-    const colLetter = COLUMN_MAPPING[heistType.toLowerCase()];
+    const cleanType = heistType.toLowerCase().trim();
+    const colLetter = COLUMN_MAPPING[cleanType];
+
     if (!colLetter) {
-        console.log(`[SHEETS] Type de braquage inconnu: ${heistType}`);
+        console.log(`[SHEETS] ❌ Type de braquage non reconnu dans COLUMN_MAPPING : "${heistType}"`);
         return;
     }
 
     if (!participants || participants.length === 0) {
-        console.log("[SHEETS] Aucun joueur valide trouvé.");
+        console.log("[SHEETS] ❌ Aucun membre à traiter.");
         return;
     }
 
     try {
-        // Récupération des noms de la colonne B (B5:B34)
+        // On récupère les noms de la colonne B de B5 à B34
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: 'B5:B34', 
+            range: 'B5:B34',
         });
 
         const rows = response.data.values || [];
 
         for (const member of participants) {
-            // Nettoyage du nom Discord (on enlève les rôles entre accolades comme {Acting Boss})
+            // Récupère le nom (displayName si c'est un GuildMember, ou string direct)
             const rawName = typeof member === 'string' ? member : member.displayName;
+            
+            // On nettoie les éventuels crochets/rôles comme "{Acting Boss}"
             const cleanDiscordName = rawName.replace(/[\{\[\(].*?[\}\]\)]/g, '').trim().toLowerCase();
 
-            // Recherche de la ligne correspondante dans le Sheet
+            // Recherche de l'index de la ligne dans le Sheet
             const rowIndex = rows.findIndex(row => {
                 if (!row[0]) return false;
                 const sheetName = row[0].trim().toLowerCase();
 
-                // Découpage en mots (ex: ["eddie", "van", "halen"])
-                const discordWords = cleanDiscordName.split(/\s+/);
-                const sheetWords = sheetName.split(/\s+/);
-
-                // Vérifie si au moins un mot de famille/prénom correspond
-                return sheetWords.some(word => word.length > 2 && cleanDiscordName.includes(word)) ||
-                       discordWords.some(word => word.length > 2 && sheetName.includes(word));
+                // Match si le nom Discord contient le nom du Sheet ou inversement
+                return sheetName.includes(cleanDiscordName) || cleanDiscordName.includes(sheetName);
             });
 
             if (rowIndex !== -1) {
+                // Ligne réelle dans le Sheet (index 0 = Ligne 5)
                 const actualRow = 5 + rowIndex;
                 const cellRange = `${colLetter}${actualRow}`;
 
-                // Récupération de la valeur actuelle
+                // 1. Lecture de la valeur actuelle
                 const cellData = await sheets.spreadsheets.values.get({
                     spreadsheetId,
                     range: cellRange,
                 });
 
-                const currentValue = parseInt(cellData.data.values?.[0]?.[0] || '0', 10);
-                const newValue = currentValue + 1;
+                const rawVal = cellData.data.values?.[0]?.[0];
+                const currentValue = parseInt(rawVal || '0', 10);
+                const newValue = (isNaN(currentValue) ? 0 : currentValue) + 1;
 
-                // Mise à jour de la cellule dans Sheets
+                // 2. Écriture du +1 dans la cellule
                 await sheets.spreadsheets.values.update({
                     spreadsheetId,
                     range: cellRange,
@@ -86,13 +90,13 @@ async function updateHeistStats(sheets, spreadsheetId, participants, heistType) 
                     }
                 });
 
-                console.log(`[SHEETS] ✅ +1 ajouté à ${rows[rowIndex][0]} (${cellRange})`);
+                console.log(`[SHEETS] ✅ ${rawName} -> Ajout de +1 en ${cellRange} (Nouvelle valeur: ${newValue})`);
             } else {
-                console.log(`[SHEETS] ❌ Aucune ligne trouvée pour : "${cleanDiscordName}"`);
+                console.log(`[SHEETS] ❌ Pas de correspondance trouvée dans le Sheet pour : "${cleanDiscordName}"`);
             }
         }
     } catch (err) {
-        console.error("[SHEETS] Erreur d'écriture :", err);
+        console.error("[SHEETS] 🚨 Erreur d'écriture sur Google Sheets :", err);
     }
 }
 async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule, grade = "Recrue" }) {
