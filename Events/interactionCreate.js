@@ -14,6 +14,57 @@ const ROLE_MORT_RP = "1508389958006865931";
 
 const WEBHOOK_SHEET_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1vD5SsRFLov-la8ntiEOO-qxW2cwcHpZyo6U0LUsRTqNABmgKMKJDhS/exec";
 
+const COLUMN_MAPPING = {
+    'pacific': 'D',
+    'bijouterie': 'E',
+    'flecca': 'F',
+    'superette': 'G',
+    'conteneur': 'H',
+    'atm': 'I'
+};
+
+async function updateHeistStats(sheets, spreadsheetId, participants, heistType) {
+    const colLetter = COLUMN_MAPPING[heistType.toLowerCase()];
+    if (!colLetter) return;
+
+    try {
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: 'B5:B34', 
+        });
+
+        const rows = response.data.values || [];
+
+        for (const member of participants) {
+            const rowIndex = rows.findIndex(row => 
+                row[0] && row[0].trim().toLowerCase() === member.displayName.trim().toLowerCase()
+            );
+
+            if (rowIndex !== -1) {
+                const actualRow = 5 + rowIndex;
+                const cellRange = `${colLetter}${actualRow}`;
+
+                const cellData = await sheets.spreadsheets.values.get({
+                    spreadsheetId,
+                    range: cellRange,
+                });
+
+                const currentValue = parseInt(cellData.data.values?.[0]?.[0] || '0', 10);
+                
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: cellRange,
+                    valueInputOption: 'USER_ENTERED',
+                    requestBody: {
+                        values: [[currentValue + 1]]
+                    }
+                });
+            }
+        }
+    } catch (err) {
+        console.error("Erreur lors de la mise à jour Google Sheets :", err);
+    }
+}
 async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule, grade = "Recrue" }) {
     if (!WEBHOOK_SHEET_URL || !nomDiscord) return;
     try {
@@ -65,6 +116,32 @@ async function getTargetMember(guild, input) {
             return await guild.members.fetch(userIdMatch[0]);
         } catch (e) {}
     }
+
+    try {
+        const members = await guild.members.search({ query: cleanInput, limit: 1 });
+        return members.first() || null;
+    } catch (err) {
+        console.error("Erreur recherche membre :", err);
+        return null;
+    }
+}
+
+async function getTargetMember(guild, input) {
+    if (!input) return null;
+    const cleanInput = input.trim();
+    
+    const userIdMatch = cleanInput.match(/\d{17,19}/);
+    if (userIdMatch) {
+        try {
+            return await guild.members.fetch(userIdMatch[0]);
+        } catch (e) {}
+    }
+
+    const cachedMember = guild.members.cache.find(m => 
+        m.displayName.toLowerCase() === cleanInput.toLowerCase() ||
+        m.user.username.toLowerCase() === cleanInput.toLowerCase()
+    );
+    if (cachedMember) return cachedMember;
 
     try {
         const members = await guild.members.search({ query: cleanInput, limit: 1 });
@@ -495,6 +572,7 @@ module.exports = async (bot, interaction) => {
 
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
+
             // MODAL MISE EN GARDE
             else if (interaction.customId === "modal_mise_en_garde") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
@@ -780,72 +858,84 @@ else if (interaction.customId.startsWith("btn_braquage_")) {
     await interaction.showModal(modal);
 }
 
-            // MODAL DÉCLARATION BRAQUAGE
-            else if (interaction.customId.startsWith("modal_braquage_")) {
-                const typeBraquage = interaction.customId.replace("modal_braquage_", "");
+           // MODAL DÉCLARATION BRAQUAGE
+else if (interaction.customId.startsWith("modal_braquage_")) {
+    const typeBraquage = interaction.customId.replace("modal_braquage_", "");
 
-                const braqueursInput = interaction.fields.getTextInputValue("input_braqueurs");
-                const otagesInput = interaction.fields.getTextInputValue("input_otages");
-                const lieuInput = interaction.fields.getTextInputValue("input_lieu");
-                const autoInput = interaction.fields.getTextInputValue("input_autorisation");
-                const gainEtCoffreInput = interaction.fields.getTextInputValue("input_gain_et_coffre");
+    const braqueursInput = interaction.fields.getTextInputValue("input_braqueurs");
+    const otagesInput = interaction.fields.getTextInputValue("input_otages");
+    const lieuInput = interaction.fields.getTextInputValue("input_lieu");
+    const autoInput = interaction.fields.getTextInputValue("input_autorisation");
+    const gainEtCoffreInput = interaction.fields.getTextInputValue("input_gain_et_coffre");
 
-                // Traitement du gain et du coffre (Format attendu : "150000$ | Oui" ou séparé par un espace/virgule)
-                let gain = gainEtCoffreInput;
-                let transfereCoffre = "Non";
+    // Traitement du gain et du coffre (Format attendu : "150000$ | Oui" ou séparé par un espace/virgule)
+    let gain = gainEtCoffreInput;
+    let transfereCoffre = "Non";
 
-                if (gainEtCoffreInput.includes("|")) {
-                    const parts = gainEtCoffreInput.split("|");
-                    gain = parts[0].trim();
-                    transfereCoffre = parts[1].trim().toLowerCase().includes("oui") ? "Oui" : "Non";
-                } else if (gainEtCoffreInput.toLowerCase().endsWith("oui")) {
-                    transfereCoffre = "Oui";
-                    gain = gainEtCoffreInput.replace(/oui/i, "").trim();
-                } else if (gainEtCoffreInput.toLowerCase().endsWith("non")) {
-                    transfereCoffre = "Non";
-                    gain = gainEtCoffreInput.replace(/non/i, "").trim();
-                }
+    if (gainEtCoffreInput.includes("|")) {
+        const parts = gainEtCoffreInput.split("|");
+        gain = parts[0].trim();
+        transfereCoffre = parts[1].trim().toLowerCase().includes("oui") ? "Oui" : "Non";
+    } else if (gainEtCoffreInput.toLowerCase().endsWith("oui")) {
+        transfereCoffre = "Oui";
+        gain = gainEtCoffreInput.replace(/oui/i, "").trim();
+    } else if (gainEtCoffreInput.toLowerCase().endsWith("non")) {
+        transfereCoffre = "Non";
+        gain = gainEtCoffreInput.replace(/non/i, "").trim();
+    }
 
-                // Formatage des mentions des braqueurs séparés par "/"
-                const listeBraqueursBrute = braqueursInput.split(/[,/]/).map(b => b.trim());
-                let braqueursFormates = [];
+    // Formatage des mentions ET récupération des membres pour le Sheet
+    const listeBraqueursBrute = braqueursInput.split(/[,/]/).map(b => b.trim());
+    let braqueursFormates = [];
+    let braqueursMembres = []; // Tableau contenant les objets GuildMember trouvés
 
-                for (const item of listeBraqueursBrute) {
-                    if (!item) continue;
-                    const member = await getTargetMember(interaction.guild, item);
-                    braqueursFormates.push(member ? member.toString() : item);
-                }
-                const texteBraqueurs = braqueursFormates.join(" / ");
+    for (const item of listeBraqueursBrute) {
+        if (!item) continue;
+        const member = await getTargetMember(interaction.guild, item);
+        if (member) {
+            braqueursFormates.push(member.toString());
+            braqueursMembres.push(member); // Ajout pour le Sheet
+        } else {
+            braqueursFormates.push(item);
+        }
+    }
+    const texteBraqueurs = braqueursFormates.join(" / ");
 
-                // Formatage de la mention d'autorisation
-                const autoMember = await getTargetMember(interaction.guild, autoInput);
-                const autoMention = autoMember ? autoMember.toString() : autoInput;
+    // MAJ Google Sheets (incrémentation du nombre de braquages +1)
+    if (typeof updateHeistStats === 'function' && typeof sheets !== 'undefined' && typeof SPREADSHEET_ID !== 'undefined') {
+        await updateHeistStats(sheets, SPREADSHEET_ID, braqueursMembres, typeBraquage);
+    }
 
-                // Titre selon la cible avec gestion de l'apostrophe pour ATM
-                let intituleTarget = "";
-                switch (typeBraquage) {
-                    case "atm": intituleTarget = "d'ATM"; break;
-                    case "conteneur": intituleTarget = "de conteneur"; break;
-                    case "superette": intituleTarget = "de supérette"; break;
-                    case "fleeca": intituleTarget = "de Fleeca"; break;
-                    case "bijouterie": intituleTarget = "de Bijouterie"; break;
-                    case "banque_centrale": intituleTarget = "de Banque Centrale"; break;
-                    default: intituleTarget = "de braquage";
-                }
+    // Formatage de la mention d'autorisation
+    const autoMember = await getTargetMember(interaction.guild, autoInput);
+    const autoMention = autoMember ? autoMember.toString() : autoInput;
 
-                const messageFinal = `**__Braquage ${intituleTarget} :__**\n\n` +
-                    `Braqueurs : ${texteBraqueurs}\n` +
-                    `Nombre d'otages : ${otagesInput}\n` +
-                    `Lieu : ${lieuInput}\n` +
-                    `Autorisation : ${autoMention}\n` +
-                    `Argent sale gagné : ${gain}\n` +
-                    `Transféré au coffre : ${transfereCoffre}`;
+    // Titre selon la cible avec gestion de l'apostrophe pour ATM
+    let intituleTarget = "";
+    switch (typeBraquage) {
+        case "atm": intituleTarget = "d'ATM"; break;
+        case "conteneur": intituleTarget = "de conteneur"; break;
+        case "superette": intituleTarget = "de supérette"; break;
+        case "fleeca": intituleTarget = "de Fleeca"; break;
+        case "bijouterie": intituleTarget = "de Bijouterie"; break;
+        case "pacific":
+        case "banque_centrale": intituleTarget = "de Banque Centrale"; break;
+        default: intituleTarget = "de braquage";
+    }
 
-                await interaction.editReply({
-                    content: messageFinal,
-                    allowedMentions: { parse: ["users", "roles"] }
-                });
-            }
+    const messageFinal = `**__Braquage ${intituleTarget} :__**\n\n` +
+        `Braqueurs : ${texteBraqueurs}\n` +
+        `Nombre d'otages : ${otagesInput}\n` +
+        `Lieu : ${lieuInput}\n` +
+        `Autorisation : ${autoMention}\n` +
+        `Argent sale gagné : ${gain}\n` +
+        `Transféré au coffre : ${transfereCoffre}`;
+
+    await interaction.editReply({
+        content: messageFinal,
+        allowedMentions: { parse: ["users", "roles"] }
+    });
+}
 
             // MODAL PRISE DE PATROUILLE
             else if (interaction.customId === "modal_patrouille") {
