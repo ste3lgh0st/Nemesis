@@ -36,9 +36,15 @@ async function updateHeistStats(sheets, spreadsheetId, participants, heistType) 
         const rows = response.data.values || [];
 
         for (const member of participants) {
-            const rowIndex = rows.findIndex(row => 
-                row[0] && row[0].trim().toLowerCase() === member.displayName.trim().toLowerCase()
-            );
+            // Extraction du nom à comparer
+            const targetName = typeof member === 'string' ? member.toLowerCase() : member.displayName.toLowerCase();
+
+            const rowIndex = rows.findIndex(row => {
+                if (!row[0]) return false;
+                const sheetName = row[0].trim().toLowerCase();
+                // Vérifie si l'un contient l'autre (ex: "Eddie Van Halen" contient "van halen")
+                return sheetName.includes(targetName) || targetName.includes(sheetName);
+            });
 
             if (rowIndex !== -1) {
                 const actualRow = 5 + rowIndex;
@@ -108,8 +114,9 @@ async function envoyerBlacklistAuSheet({ nomPrenom, duree, date, lienDiscord, ra
 
 async function getTargetMember(guild, input) {
     if (!input) return null;
-    const cleanInput = input.trim();
+    const cleanInput = input.trim().toLowerCase();
     
+    // 1. Recherche par ID ou Mention Discord (@nom)
     const userIdMatch = cleanInput.match(/\d{17,19}/);
     if (userIdMatch) {
         try {
@@ -117,11 +124,28 @@ async function getTargetMember(guild, input) {
         } catch (e) {}
     }
 
+    // Assurer que le cache est chargé
+    try { await guild.members.fetch(); } catch (e) {}
+
+    // 2. Recherche partielle dans le cache (nom RP, pseudo serveur, username)
+    const cachedMember = guild.members.cache.find(m => {
+        const displayName = m.displayName.toLowerCase();
+        const username = m.user.username.toLowerCase();
+        const globalName = (m.user.globalName || '').toLowerCase();
+
+        return displayName.includes(cleanInput) || 
+               cleanInput.includes(displayName) ||
+               username.includes(cleanInput) ||
+               globalName.includes(cleanInput);
+    });
+
+    if (cachedMember) return cachedMember;
+
+    // 3. Fallback Recherche API
     try {
         const members = await guild.members.search({ query: cleanInput, limit: 1 });
         return members.first() || null;
     } catch (err) {
-        console.error("Erreur recherche membre :", err);
         return null;
     }
 }
