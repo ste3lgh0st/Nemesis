@@ -1,4 +1,5 @@
 const Discord = require("discord.js");
+const hierarchie = require("../hierarchie.json");
 
 const ROLES_WARN = {
     1: "1472563147834392712", 
@@ -13,7 +14,8 @@ const ROLE_MORT_RP = "1508389958006865931";
 
 const WEBHOOK_SHEET_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1vD5SsRFLov-la8ntiEOO-qxW2cwcHpZyo6U0LUsRTqNABmgKMKJDhS/exec";
 
-async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule }) {
+// 🔹 Grade prédéfini automatiquement sur "Recrue" si non spécifié
+async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule, grade = "Recrue" }) {
     if (!WEBHOOK_SHEET_URL || !nomDiscord) return;
     try {
         await fetch(WEBHOOK_SHEET_URL, {
@@ -21,12 +23,36 @@ async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 nomDiscord: nomDiscord,
+                grade: grade,
                 texteAbsence: texteAbsence || null,
                 sanctionIntitule: sanctionIntitule || null
             })
         });
     } catch (err) {
         console.error("Erreur d'envoi vers Google Sheet :", err);
+    }
+}
+
+async function envoyerBlacklistAuSheet({ nomPrenom, duree, date, lienDiscord, raison }) {
+    if (!WEBHOOK_SHEET_URL) return;
+    try {
+        await fetch(WEBHOOK_SHEET_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action: "blacklist",
+                nomPrenom: nomPrenom,
+                neLe: "//",
+                sexe: "Homme",
+                taille: "//",
+                duree: duree,
+                date: date,
+                lienDiscord: lienDiscord,
+                raison: raison
+            })
+        });
+    } catch (err) {
+        console.error("Erreur d'envoi Blacklist vers Sheet :", err);
     }
 }
 
@@ -202,6 +228,7 @@ module.exports = async (bot, interaction) => {
             // Acknowledgment immédiat pour éviter le timeout de 3s
             await interaction.deferReply();
 
+            // MODAL ABSENCE
             if (interaction.customId === "modal_absence") {
                 const dateDebut = interaction.fields.getTextInputValue("input_date_debut");
                 const dateFin = interaction.fields.getTextInputValue("input_date_fin");
@@ -220,6 +247,7 @@ module.exports = async (bot, interaction) => {
                 });
             }
 
+            // MODAL COFFRE (DEPOT ET RETRAIT)
             else if (interaction.customId.startsWith("modal_depot_") || interaction.customId.startsWith("modal_retrait_")) {
                 const isDepot = interaction.customId.startsWith("modal_depot_");
                 const keyCoffre = interaction.customId.replace(isDepot ? "modal_depot_" : "modal_retrait_", "");
@@ -292,7 +320,7 @@ module.exports = async (bot, interaction) => {
                     `${level === "3" ? "☒" : "☐"} Dernier avertissement avant sanction`
                 ].join("\n");
 
-                const template = `# AVERTISSEMENT \n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAu sein de cette Famille, chaque décision est prise avec réflexion. Aujourd'hui, nous choisissons de vous laisser une occasion de prouver votre valeur.\n\nConsidérez cette décision comme une faveur, non comme une faiblesse.\n\nLe moindre nouvel écart entraînera des mesures plus sévères.\n\n**Décision :**\n${decisionTexte}\n\n**Cordialement,**\n<@&1508046852027842600>`;
+                const template = `# AVERTISSEMENT \n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAu sein de cette Famille, chaque décision est prise avec réflexion. Aujourd'hui, nous choisissons de vous laisser une occasion de prouver votre valeur.\n\nConsidérez cette décision comme une faveur, non comme une faiblesse.\n\nLe moindre nouvel écart entraînera des mesures plus severe.\n\n**Décision :**\n${decisionTexte}\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
@@ -395,16 +423,22 @@ module.exports = async (bot, interaction) => {
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
                 let memberMention = targetMember ? targetMember.toString() : membreInput;
                 let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                let lienDiscord = targetMember ? `https://discord.com/users/${targetMember.id}` : membreInput;
 
                 if (targetMember && ROLE_BLACKLIST) {
                     await targetMember.roles.add(ROLE_BLACKLIST).catch(err => console.error("Erreur ajout rôle blacklist :", err));
                 }
 
-                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Blacklist" })
-                    .catch(err => console.error("Erreur Google Sheet :", err));
+                envoyerBlacklistAuSheet({
+                    nomPrenom: nomCible,
+                    duree: dureeInput,
+                    date: dateFormatted,
+                    lienDiscord: lienDiscord,
+                    raison: motif
+                }).catch(err => console.error("Erreur Google Sheet Blacklist :", err));
 
-                let dureeTexte = (dureeInput.toLowerCase() === "permanente" || dureeInput.toLowerCase() === "perm")
-                    ? "☒ Permanente\n☐ Temporaire :"
+                let dureeTexte = (dureeInput.toLowerCase() === "permanente" || dureeInput.toLowerCase() === "perm" || dureeInput.toLowerCase() === "indéterminée")
+                    ? "☒ Indéterminée / Permanente\n☐ Temporaire :"
                     : `☐ Permanente\n☒ Temporaire : ${dureeInput}`;
 
                 const template = `# BLACKLIST\n\n## MAFIA The Olympius Syndicate\n\n**Nom de la personne :** ${memberMention}\n\n**Inscription décidée par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\n**Durée :**\n${dureeTexte}\n\nPar décision de la Direction, vous êtes inscrit sur la **Blacklist officielle de The Olympius Syndicate**.\n\nCette mesure vous interdit toute réintégration ou toute collaboration avec notre Famille pendant la durée indiquée.\n\nLa confiance ne se réclame pas. Elle se mérite.\n\nVotre dossier restera archivé au sein de nos registres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
@@ -415,14 +449,92 @@ module.exports = async (bot, interaction) => {
             // MODAL PROMOTION
             else if (interaction.customId === "modal_promotion") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
+                const gradeInput = interaction.fields.getTextInputValue("input_grade");
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
                 let memberMention = targetMember ? targetMember.toString() : membreInput;
+                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
-                const template = `# PROMOTION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu sa décision.\n\nVos actions ont fait honneur à notre Famille.\n\nVotre fidélité nous prouve aujourd'hui que vous êtes capable du meilleur.\n\nHonorez cette promotion et continuez à vous montrer digne de votre place parmi nous.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+                let gradeAffichage = gradeInput;
 
-                await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+                if (targetMember && gradeInput) {
+                    const nouveauGradeObj = hierarchie.roles.find(
+                        r => r.nom.toLowerCase() === gradeInput.trim().toLowerCase()
+                    );
+
+                    if (nouveauGradeObj) {
+                        gradeAffichage = `<@&${nouveauGradeObj.id}>`;
+
+                        const idsHierarchie = hierarchie.roles.map(r => r.id);
+
+                        const rolesARetirer = targetMember.roles.cache.filter(r => idsHierarchie.includes(r.id));
+                        if (rolesARetirer.size > 0) {
+                            await targetMember.roles.remove(rolesARetirer).catch(err => console.error("Erreur retrait anciens rôles hiérarchie :", err));
+                        }
+
+                        await targetMember.roles.add(nouveauGradeObj.id).catch(err => console.error("Erreur ajout nouveau rôle hiérarchie :", err));
+                    }
+                }
+
+                envoyerAuGoogleSheet(nomCible, { 
+                    grade: gradeInput || "Recrue", 
+                    sanctionIntitule: `Promotion : ${gradeInput || "Nouveau Grade"}` 
+                }).catch(err => console.error("Erreur Google Sheet :", err));
+
+                const template = `# PROMOTION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Nouveau Grade :** ${gradeAffichage}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu sa décision.\n\nVos actions ont fait honneur à notre Famille.\n\nVotre fidélité nous prouve aujourd'hui que vous êtes capable du meilleur.\n\nHonorez cette promotion et continuez à vous montrer digne de votre place parmi nous.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+
+                await interaction.editReply({ 
+                    content: template, 
+                    allowedMentions: { parse: ["users", "roles", "everyone"] } 
+                });
+            }
+
+            // MODAL RÉTROGRADATION
+            else if (interaction.customId === "modal_retrogradation") {
+                const membreInput = interaction.fields.getTextInputValue("input_membre");
+                const gradeInput = interaction.fields.getTextInputValue("input_grade");
+                const motif = interaction.fields.getTextInputValue("input_motif");
+
+                const targetMember = await getTargetMember(interaction.guild, membreInput);
+                let memberMention = targetMember ? targetMember.toString() : membreInput;
+                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+
+                let gradeAffichage = gradeInput;
+
+                if (targetMember && gradeInput) {
+                    const nouveauGradeObj = hierarchie.roles.find(
+                        r => r.nom.toLowerCase() === gradeInput.trim().toLowerCase()
+                    );
+
+                    if (nouveauGradeObj) {
+                        gradeAffichage = `<@&${nouveauGradeObj.id}>`;
+
+                        const idsHierarchie = hierarchie.roles.map(r => r.id);
+
+                        // Retrait des anciens rôles de hiérarchie
+                        const rolesARetirer = targetMember.roles.cache.filter(r => idsHierarchie.includes(r.id));
+                        if (rolesARetirer.size > 0) {
+                            await targetMember.roles.remove(rolesARetirer).catch(err => console.error("Erreur retrait anciens rôles hiérarchie :", err));
+                        }
+
+                        // Ajout du nouveau rôle inférieur
+                        await targetMember.roles.add(nouveauGradeObj.id).catch(err => console.error("Erreur ajout nouveau rôle hiérarchie :", err));
+                    }
+                }
+
+                // Mise à jour sur le Google Sheet
+                envoyerAuGoogleSheet(nomCible, { 
+                    grade: gradeInput || "Recrue", 
+                    sanctionIntitule: `Rétrogradation : ${gradeInput || "Ancien Grade"}` 
+                }).catch(err => console.error("Erreur Google Sheet :", err));
+
+                const template = `# RÉTROGRADATION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Nouveau Grade :** ${gradeAffichage}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu sa décision.\n\nVos récents agissements et vos erreurs ne correspondent plus aux exigences de votre rang.\n\nCette rétrogradation est un rappel à l'ordre formel. À vous de faire vos preuves à nouveau si vous souhaitez regagner la confiance de la Famille.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+
+                await interaction.editReply({ 
+                    content: template, 
+                    allowedMentions: { parse: ["users", "roles", "everyone"] } 
+                });
             }
 
             // MODAL PRIME

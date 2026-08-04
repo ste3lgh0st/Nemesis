@@ -6,6 +6,7 @@ module.exports = {
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 
+    // 1. Déclenchement de la commande : Affichage du Modal
     async run(bot, message) {
         const modal = new Discord.ModalBuilder()
             .setCustomId("modal_blacklist")
