@@ -180,6 +180,128 @@ module.exports = async (bot, interaction) => {
 
                 await interaction.showModal(modal);
             }
+            else if (interaction.customId === "btn_start_patrouille") {
+                const modal = new Discord.ModalBuilder()
+                    .setCustomId("modal_patrouille")
+                    .setTitle("Prise de Patrouille");
+
+                const inputLeader = new Discord.TextInputBuilder()
+                    .setCustomId("input_leader")
+                    .setLabel("Plus haut gradé (mention/ID/pseudo)")
+                    .setPlaceholder("Ex: @Leader ou 123456789")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputMembres = new Discord.TextInputBuilder()
+                    .setCustomId("input_membres")
+                    .setLabel("Membres présents (mentions/pseudos)")
+                    .setPlaceholder("Ex: @Membre1, @Membre2")
+                    .setStyle(Discord.TextInputStyle.Paragraph)
+                    .setRequired(true);
+
+                const inputModele = new Discord.TextInputBuilder()
+                    .setCustomId("input_modele")
+                    .setLabel("Modèle du véhicule")
+                    .setPlaceholder("Ex: Sultan RS, Cognoscenti...")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputPlaque = new Discord.TextInputBuilder()
+                    .setCustomId("input_plaque")
+                    .setLabel("Plaque d'immatriculation")
+                    .setPlaceholder("Ex: OLY-889")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                modal.addComponents(
+                    new Discord.ActionRowBuilder().addComponents(inputLeader),
+                    new Discord.ActionRowBuilder().addComponents(inputMembres),
+                    new Discord.ActionRowBuilder().addComponents(inputModele),
+                    new Discord.ActionRowBuilder().addComponents(inputPlaque)
+                );
+
+                await interaction.showModal(modal);
+            }
+            else if (interaction.customId === "btn_end_patrouille") {
+                const timestampFin = Math.floor(Date.now() / 1000);
+                let contentOriginal = interaction.message.content;
+
+                let nouveauContenu = contentOriginal
+                    .replace(
+                        "**Date et heure de fin :** *En cours...*",
+                        `**Date et heure de fin :** <t:${timestampFin}:f> (<t:${timestampFin}:R>)`
+                    )
+                    .replace(
+                        "**Status :** 🟢 **Patrouille Active**",
+                        "**Status :** 🔴 **Patrouille Terminée**"
+                    );
+
+                const btnTermine = new Discord.ButtonBuilder()
+                    .setCustomId("btn_patrouille_terminee")
+                    .setLabel("Patrouille Terminée")
+                    .setStyle(Discord.ButtonStyle.Secondary)
+                    .setDisabled(true);
+
+                const row = new Discord.ActionRowBuilder().addComponents(btnTermine);
+
+                await interaction.update({
+                    content: nouveauContenu,
+                    components: [row]
+                });
+            }
+            else if (interaction.customId === "btn_start_ronde") {
+                const modal = new Discord.ModalBuilder()
+                    .setCustomId("modal_ronde")
+                    .setTitle("Prise de Ronde");
+
+                const inputSection = new Discord.TextInputBuilder()
+                    .setCustomId("input_section")
+                    .setLabel("Section(s) protégée(s) (1, 2, 3 ou 4)")
+                    .setPlaceholder("Ex: Section 1 et 2")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputMembres = new Discord.TextInputBuilder()
+                    .setCustomId("input_membres")
+                    .setLabel("Membres présents (mentions/pseudos)")
+                    .setPlaceholder("Ex: @Membre1, @Membre2")
+                    .setStyle(Discord.TextInputStyle.Paragraph)
+                    .setRequired(true);
+
+                modal.addComponents(
+                    new Discord.ActionRowBuilder().addComponents(inputSection),
+                    new Discord.ActionRowBuilder().addComponents(inputMembres)
+                );
+
+                await interaction.showModal(modal);
+            }
+            else if (interaction.customId === "btn_end_ronde") {
+                const timestampFin = Math.floor(Date.now() / 1000);
+                let contentOriginal = interaction.message.content;
+
+                const nouveauContenu = contentOriginal
+                    .replace(
+                        "**Date et heure de fin :** *En cours...*",
+                        `**Date et heure de fin :** <t:${timestampFin}:f> (<t:${timestampFin}:R>)`
+                    )
+                    .replace(
+                        "**Status :** 🟢 **Ronde Active**",
+                        "**Status :** 🔴 **Ronde Terminée**"
+                    );
+
+                const btnTermine = new Discord.ButtonBuilder()
+                    .setCustomId("btn_ronde_terminee")
+                    .setLabel("Ronde Terminée")
+                    .setStyle(Discord.ButtonStyle.Secondary)
+                    .setDisabled(true);
+
+                const row = new Discord.ActionRowBuilder().addComponents(btnTermine);
+
+                await interaction.update({
+                    content: nouveauContenu,
+                    components: [row]
+                });
+            }
             return;
         }
 
@@ -512,18 +634,15 @@ module.exports = async (bot, interaction) => {
 
                         const idsHierarchie = hierarchie.roles.map(r => r.id);
 
-                        // Retrait des anciens rôles de hiérarchie
                         const rolesARetirer = targetMember.roles.cache.filter(r => idsHierarchie.includes(r.id));
                         if (rolesARetirer.size > 0) {
                             await targetMember.roles.remove(rolesARetirer).catch(err => console.error("Erreur retrait anciens rôles hiérarchie :", err));
                         }
 
-                        // Ajout du nouveau rôle inférieur
                         await targetMember.roles.add(nouveauGradeObj.id).catch(err => console.error("Erreur ajout nouveau rôle hiérarchie :", err));
                     }
                 }
 
-                // Mise à jour sur le Google Sheet
                 envoyerAuGoogleSheet(nomCible, { 
                     grade: gradeInput || "Recrue", 
                     sanctionIntitule: `Rétrogradation : ${gradeInput || "Ancien Grade"}` 
@@ -550,6 +669,134 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
+            else if (interaction.customId.startsWith("btn_braquage_")) {
+                const typeBraquage = interaction.customId.replace("btn_braquage_", "");
+
+                let titreModal = "Déclaration de Braquage";
+                if (typeBraquage === "atm") titreModal = "Braquage d'ATM";
+                else if (typeBraquage === "conteneur") titreModal = "Braquage de Conteneur";
+                else if (typeBraquage === "superette") titreModal = "Braquage de Supérette";
+                else if (typeBraquage === "fleeca") titreModal = "Braquage de Fleeca";
+                else if (typeBraquage === "bijouterie") titreModal = "Braquage de Bijouterie";
+                else if (typeBraquage === "banque_centrale") titreModal = "Braquage de Banque Centrale";
+
+                const modal = new Discord.ModalBuilder()
+                    .setCustomId(`modal_braquage_${typeBraquage}`)
+                    .setTitle(titreModal);
+
+                const inputBraqueurs = new Discord.TextInputBuilder()
+                    .setCustomId("input_braqueurs")
+                    .setLabel("Braqueurs (mentions, pseudos ou IDs)")
+                    .setPlaceholder("Ex: @Membre1, @Membre2 ou nonop, alex")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputOtages = new Discord.TextInputBuilder()
+                    .setCustomId("input_otages")
+                    .setLabel("Nombre d'otages")
+                    .setPlaceholder("Ex: 3 (ou 0 si aucun)")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputLieu = new Discord.TextInputBuilder()
+                    .setCustomId("input_lieu")
+                    .setLabel("Lieu")
+                    .setPlaceholder("Ex: Supérette Vinewood / Fleeca Legion Square")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputAutorisation = new Discord.TextInputBuilder()
+                    .setCustomId("input_autorisation")
+                    .setLabel("Autorisation donnée par (mention/pseudo)")
+                    .setPlaceholder("Ex: @Leader ou nonop")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputGain = new Discord.TextInputBuilder()
+                    .setCustomId("input_gain_et_coffre")
+                    .setLabel("Argent sale gagné & Transféré au coffre")
+                    .setPlaceholder("Ex: 150000$ | Oui (ou Non)")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                modal.addComponents(
+                    new Discord.ActionRowBuilder().addComponents(inputBraqueurs),
+                    new Discord.ActionRowBuilder().addComponents(inputOtages),
+                    new Discord.ActionRowBuilder().addComponents(inputLieu),
+                    new Discord.ActionRowBuilder().addComponents(inputAutorisation),
+                    new Discord.ActionRowBuilder().addComponents(inputGain)
+                );
+
+                await interaction.showModal(modal);
+            }
+
+            // MODAL DÉCLARATION BRAQUAGE
+            else if (interaction.customId.startsWith("modal_braquage_")) {
+                const typeBraquage = interaction.customId.replace("modal_braquage_", "");
+
+                const braqueursInput = interaction.fields.getTextInputValue("input_braqueurs");
+                const otagesInput = interaction.fields.getTextInputValue("input_otages");
+                const lieuInput = interaction.fields.getTextInputValue("input_lieu");
+                const autoInput = interaction.fields.getTextInputValue("input_autorisation");
+                const gainEtCoffreInput = interaction.fields.getTextInputValue("input_gain_et_coffre");
+
+                // Traitement du gain et du coffre (Format attendu : "150000$ | Oui" ou séparé par un espace/virgule)
+                let gain = gainEtCoffreInput;
+                let transfereCoffre = "Non";
+
+                if (gainEtCoffreInput.includes("|")) {
+                    const parts = gainEtCoffreInput.split("|");
+                    gain = parts[0].trim();
+                    transfereCoffre = parts[1].trim().toLowerCase().includes("oui") ? "Oui" : "Non";
+                } else if (gainEtCoffreInput.toLowerCase().endsWith("oui")) {
+                    transfereCoffre = "Oui";
+                    gain = gainEtCoffreInput.replace(/oui/i, "").trim();
+                } else if (gainEtCoffreInput.toLowerCase().endsWith("non")) {
+                    transfereCoffre = "Non";
+                    gain = gainEtCoffreInput.replace(/non/i, "").trim();
+                }
+
+                // Formatage des mentions des braqueurs séparés par "/"
+                const listeBraqueursBrute = braqueursInput.split(/[,/]/).map(b => b.trim());
+                let braqueursFormates = [];
+
+                for (const item of listeBraqueursBrute) {
+                    if (!item) continue;
+                    const member = await getTargetMember(interaction.guild, item);
+                    braqueursFormates.push(member ? member.toString() : item);
+                }
+                const texteBraqueurs = braqueursFormates.join(" / ");
+
+                // Formatage de la mention d'autorisation
+                const autoMember = await getTargetMember(interaction.guild, autoInput);
+                const autoMention = autoMember ? autoMember.toString() : autoInput;
+
+                // Titre selon la cible avec gestion de l'apostrophe pour ATM
+                let intituleTarget = "";
+                switch (typeBraquage) {
+                    case "atm": intituleTarget = "d'ATM"; break;
+                    case "conteneur": intituleTarget = "de conteneur"; break;
+                    case "superette": intituleTarget = "de supérette"; break;
+                    case "fleeca": intituleTarget = "de Fleeca"; break;
+                    case "bijouterie": intituleTarget = "de Bijouterie"; break;
+                    case "banque_centrale": intituleTarget = "de Banque Centrale"; break;
+                    default: intituleTarget = "de braquage";
+                }
+
+                const messageFinal = `**__Braquage ${intituleTarget} :__**\n\n` +
+                    `Braqueurs : ${texteBraqueurs}\n` +
+                    `Nombre d'otages : ${otagesInput}\n` +
+                    `Lieu : ${lieuInput}\n` +
+                    `Autorisation : ${autoMention}\n` +
+                    `Argent sale gagné : ${gain}\n` +
+                    `Transféré au coffre : ${transfereCoffre}`;
+
+                await interaction.editReply({
+                    content: messageFinal,
+                    allowedMentions: { parse: ["users", "roles"] }
+                });
+            }
+
             // MODAL PRISE DE PATROUILLE
             else if (interaction.customId === "modal_patrouille") {
                 const leaderInput = interaction.fields.getTextInputValue("input_leader");
@@ -557,14 +804,12 @@ module.exports = async (bot, interaction) => {
                 const modele = interaction.fields.getTextInputValue("input_modele");
                 const plaque = interaction.fields.getTextInputValue("input_plaque");
 
-                // Traitement du Leader (Mention automatique si trouvé)
                 const leaderTarget = await getTargetMember(interaction.guild, leaderInput);
                 const leaderMention = leaderTarget ? leaderTarget.toString() : leaderInput;
 
-                // Horodatage dynamique Discord (Date + Heure)
                 const timestampDebut = Math.floor(Date.now() / 1000);
 
-                const template = `# PRISE DE PATROUILLE\n\n## MAFIA The Olympius Syndicate\n\n**Date et heure de début :** <t:${timestampDebut}:f> (<t:${timestampDebut}:R>)\n**Date et heure de fin :** *En cours...\n\n**Plus haut gradé :** ${leaderMention}\n**Membres présents :**\n${membresInput}\n\n**Véhicule :** ${modele} *(Plaque : ${plaque})*\n\n**Status :** 🟢 **Patrouille Active**\n\n**Cordialement,**\n<@&1508046852027842600>`;
+                const template = `# PRISE DE PATROUILLE\n\n## MAFIA The Olympius Syndicate\n\n**Date et heure de début :** <t:${timestampDebut}:f> (<t:${timestampDebut}:R>)\n**Date et heure de fin :** *En cours...*\n\n**Plus haut gradé :** ${leaderMention}\n**Membres présents :**\n${membresInput}\n\n**Véhicule :** ${modele} *(Plaque : ${plaque})*\n\n**Status :** 🟢 **Patrouille Active**\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
                 const btnFin = new Discord.ButtonBuilder()
                     .setCustomId("btn_end_patrouille")
@@ -580,160 +825,31 @@ module.exports = async (bot, interaction) => {
                 });
             }
 
-            if (interaction.customId === "btn_start_patrouille") {
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId("modal_patrouille")
-                    .setTitle("Prise de Patrouille");
+            // MODAL PRISE DE RONDE
+            else if (interaction.customId === "modal_ronde") {
+                const sectionInput = interaction.fields.getTextInputValue("input_section");
+                const membresInput = interaction.fields.getTextInputValue("input_membres");
 
-                const inputLeader = new Discord.TextInputBuilder()
-                    .setCustomId("input_leader")
-                    .setLabel("Plus haut gradé (mention/ID/pseudo)")
-                    .setPlaceholder("Ex: @Leader ou 123456789")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+                const timestampDebut = Math.floor(Date.now() / 1000);
 
-                const inputMembres = new Discord.TextInputBuilder()
-                    .setCustomId("input_membres")
-                    .setLabel("Membres présents (mentions/pseudos)")
-                    .setPlaceholder("Ex: @Membre1, @Membre2")
-                    .setStyle(Discord.TextInputStyle.Paragraph)
-                    .setRequired(true);
+                const template = `# PRISE DE RONDE\n\n## MAFIA The Olympius Syndicate\n\n**Date et heure de début :** <t:${timestampDebut}:f> (<t:${timestampDebut}:R>)\n**Date et heure de fin :** *En cours...*\n\n**Section(s) protégée(s) :** ${sectionInput}\n\n**Membres présents :**\n${membresInput}\n\n**Status :** 🟢 **Ronde Active**\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                const inputModele = new Discord.TextInputBuilder()
-                    .setCustomId("input_modele")
-                    .setLabel("Modèle du véhicule")
-                    .setPlaceholder("Ex: Sultan RS, Cognoscenti...")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+                const btnFinRonde = new Discord.ButtonBuilder()
+                    .setCustomId("btn_end_ronde")
+                    .setLabel("Fin de ronde")
+                    .setStyle(Discord.ButtonStyle.Danger);
 
-                const inputPlaque = new Discord.TextInputBuilder()
-                    .setCustomId("input_plaque")
-                    .setLabel("Plaque d'immatriculation")
-                    .setPlaceholder("Ex: OLY-889")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+                const row = new Discord.ActionRowBuilder().addComponents(btnFinRonde);
 
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputLeader),
-                    new Discord.ActionRowBuilder().addComponents(inputMembres),
-                    new Discord.ActionRowBuilder().addComponents(inputModele),
-                    new Discord.ActionRowBuilder().addComponents(inputPlaque)
-                );
-
-                await interaction.showModal(modal);
-            }
-
-            else if (interaction.customId === "btn_end_patrouille") {
-                // Horodatage dynamique Discord pour l'heure exacte de fin
-                const timestampFin = Math.floor(Date.now() / 1000);
-
-                // Récupération du message d'origine
-                let contentOriginal = interaction.message.content;
-
-                let nouveauContenu = contentOriginal
-                .replace(
-                      "**Date et heure de fin :** *En cours...*",
-                     `**Date et heure de fin :** <t:${timestampFin}:f> (<t:${timestampFin}:R>)`
-                    )
-                .replace(
-                         "**Status :** 🟢 **Patrouille Active**",
-                         "**Status :** 🔴 **Patrouille Terminée**"
-                    );
-e
-                const btnTermine = new Discord.ButtonBuilder()
-                    .setCustomId("btn_patrouille_terminee")
-                    .setLabel("Patrouille Terminée")
-                    .setStyle(Discord.ButtonStyle.Secondary)
-                    .setDisabled(true);
-
-                const row = new Discord.ActionRowBuilder().addComponents(btnTermine);
-
-                await interaction.update({
-                    content: nouveauContenu,
-                    components: [row]
+                await interaction.editReply({
+                    content: template,
+                    components: [row],
+                    allowedMentions: { parse: ["users", "roles"] }
                 });
             }
-
-            if (interaction.isModalSubmit()) {
-
-    if (interaction.customId === "modal_ronde") {
-        await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral });
-
-        const section = interaction.fields.getTextInputValue("ronde_section");
-        const membresInput = interaction.fields.getTextInputValue("ronde_membres");
-        
-        const timestampDebut = Math.floor(Date.now() / 1000);
-        const emetteur = interaction.user;
-
-        // Bouton pour clore la ronde
-        const btnFinRonde = new Discord.ActionRowBuilder().addComponents(
-            new Discord.ButtonBuilder()
-                .setCustomId("btn_end_ronde")
-                .setLabel("Terminer la Ronde")
-                .setStyle(Discord.ButtonStyle.Danger)
-                .setEmoji("⏹️")
-        );
-    }
-
-    // CLIC SUR BOUTON : DÉCLENCHER LE MODAL RONDE
-            if (interaction.customId === "btn_start_ronde") {
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId("modal_ronde")
-                    .setTitle("Prise de Ronde");
-
-                const inputSection = new Discord.TextInputBuilder()
-                    .setCustomId("input_section")
-                    .setLabel("Section(s) protégée(s) (1, 2, 3 ou 4)")
-                    .setPlaceholder("Ex: Section 1 et 2")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputMembres = new Discord.TextInputBuilder()
-                    .setCustomId("input_membres")
-                    .setLabel("Membres présents (mentions/pseudos)")
-                    .setPlaceholder("Ex: @Membre1, @Membre2")
-                    .setStyle(Discord.TextInputStyle.Paragraph)
-                    .setRequired(true);
-
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputSection),
-                    new Discord.ActionRowBuilder().addComponents(inputMembres)
-                );
-
-                await interaction.showModal(modal);
-            }
-
-            // CLIC SUR BOUTON : FIN DE RONDE
-            else if (interaction.customId === "btn_end_ronde") {
-                const timestampFin = Math.floor(Date.now() / 1000);
-                let contentOriginal = interaction.message.content;
-
-                // Mise à jour de la date de fin et du statut
-                const nouveauContenu = contentOriginal
-                    .replace(
-                        "**Date et heure de fin :** *En cours...*",
-                        `**Date et heure de fin :** <t:${timestampFin}:f> (<t:${timestampFin}:R>)`
-                    )
-                    .replace(
-                        "**Status :** 🟢 **Ronde Active**",
-                        "**Status :** 🔴 **Ronde Terminée**"
-                    );
-
-                const btnTermine = new Discord.ButtonBuilder()
-                    .setCustomId("btn_ronde_terminee")
-                    .setLabel("Ronde Terminée")
-                    .setStyle(Discord.ButtonStyle.Secondary)
-                    .setDisabled(true);
-
-                const row = new Discord.ActionRowBuilder().addComponents(btnTermine);
-
-                await interaction.update({
-                    content: nouveauContenu,
-                    components: [row]
-                });
-            }
-}
+            return;
         }
+
     } catch (error) {
         console.error("Erreur lors du traitement de l'interaction :", error);
         
