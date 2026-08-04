@@ -26,64 +26,73 @@ const COLUMN_MAPPING = {
 async function updateHeistStats(sheets, spreadsheetId, participants, heistType) {
     const colLetter = COLUMN_MAPPING[heistType.toLowerCase()];
     if (!colLetter) {
-        console.log("Type de braquage non reconnu :", heistType);
+        console.log(`[SHEETS] Type de braquage inconnu: ${heistType}`);
         return;
     }
 
     if (!participants || participants.length === 0) {
-        console.log("Aucun membre trouvé pour mettre à jour le Sheet.");
+        console.log("[SHEETS] Aucun joueur valide trouvé.");
         return;
     }
 
     try {
-        // Ajuste 'Feuille 1' par le nom exact de l'onglet si besoin
-        const rangeSearch = 'B5:B34'; 
-        
+        // Récupération des noms de la colonne B (B5:B34)
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: rangeSearch, 
+            range: 'B5:B34', 
         });
 
         const rows = response.data.values || [];
 
         for (const member of participants) {
-            // Nom du joueur à chercher (displayName Discord)
-            const targetName = typeof member === 'string' ? member.toLowerCase() : member.displayName.toLowerCase();
+            // Nettoyage du nom Discord (on enlève les rôles entre accolades comme {Acting Boss})
+            const rawName = typeof member === 'string' ? member : member.displayName;
+            const cleanDiscordName = rawName.replace(/[\{\[\(].*?[\}\]\)]/g, '').trim().toLowerCase();
 
+            // Recherche de la ligne correspondante dans le Sheet
             const rowIndex = rows.findIndex(row => {
                 if (!row[0]) return false;
                 const sheetName = row[0].trim().toLowerCase();
-                
-                // Compare par sous-chaîne (ex: "van halen" correspond à "Eddie Van Halen")
-                return sheetName.includes(targetName) || targetName.includes(sheetName);
+
+                // Découpage en mots (ex: ["eddie", "van", "halen"])
+                const discordWords = cleanDiscordName.split(/\s+/);
+                const sheetWords = sheetName.split(/\s+/);
+
+                // Vérifie si au moins un mot de famille/prénom correspond
+                return sheetWords.some(word => word.length > 2 && cleanDiscordName.includes(word)) ||
+                       discordWords.some(word => word.length > 2 && sheetName.includes(word));
             });
 
             if (rowIndex !== -1) {
                 const actualRow = 5 + rowIndex;
                 const cellRange = `${colLetter}${actualRow}`;
 
+                // Récupération de la valeur actuelle
                 const cellData = await sheets.spreadsheets.values.get({
                     spreadsheetId,
                     range: cellRange,
                 });
 
                 const currentValue = parseInt(cellData.data.values?.[0]?.[0] || '0', 10);
-                
+                const newValue = currentValue + 1;
+
+                // Mise à jour de la cellule dans Sheets
                 await sheets.spreadsheets.values.update({
                     spreadsheetId,
                     range: cellRange,
                     valueInputOption: 'USER_ENTERED',
                     requestBody: {
-                        values: [[currentValue + 1]]
+                        values: [[newValue]]
                     }
                 });
-                console.log(`Sheet mis à jour pour ${targetName} à la ligne ${actualRow}, colonne ${colLetter}`);
+
+                console.log(`[SHEETS] ✅ +1 ajouté à ${rows[rowIndex][0]} (${cellRange})`);
             } else {
-                console.log(`Aucune correspondance dans le Sheet pour : ${targetName}`);
+                console.log(`[SHEETS] ❌ Aucune ligne trouvée pour : "${cleanDiscordName}"`);
             }
         }
     } catch (err) {
-        console.error("Erreur Google Sheets :", err);
+        console.error("[SHEETS] Erreur d'écriture :", err);
     }
 }
 async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule, grade = "Recrue" }) {
@@ -130,59 +139,34 @@ async function envoyerBlacklistAuSheet({ nomPrenom, duree, date, lienDiscord, ra
 async function getTargetMember(guild, input) {
     if (!input) return null;
     const cleanInput = input.trim().toLowerCase();
-    
-    console.log(`\n[DEBUG - DISCORD] 🔎 Recherche du membre pour l'input : "${cleanInput}"`);
 
-    // 1. Recherche par mention directe ou ID
+    // 1. Recherche par ID ou Mention (@User)
     const userIdMatch = cleanInput.match(/\d{17,19}/);
     if (userIdMatch) {
         try {
             const m = await guild.members.fetch(userIdMatch[0]);
-            console.log(`[DEBUG - DISCORD] ✅ Membre trouvé via ID: ${m.displayName}`);
-            return m;
-        } catch (e) {
-            console.log(`[DEBUG - DISCORD] ❌ Erreur ID:`, e.message);
-        }
+            if (m && !m.user.bot) return m;
+        } catch (e) {}
     }
 
-    // 2. On force le bot à télécharger TOUS les membres du serveur
-    try {
-        await guild.members.fetch();
-        console.log(`[DEBUG - DISCORD] 🔄 Cache mis à jour, total membres sur le serveur: ${guild.members.cache.size}`);
-    } catch (e) {
-        console.error("[DEBUG - DISCORD] ❌ Erreur fetch membres:", e.message);
-    }
+    // 2. Chargement du cache des membres
+    try { await guild.members.fetch(); } catch (e) {}
 
-    // 3. Recherche dans le cache avec une méthode très souple
+    // 3. Recherche dans les membres Humains uniquement (exclut tous les bots)
     const foundMember = guild.members.cache.find(m => {
-        const dName = (m.displayName || "").toLowerCase();
-        const uName = (m.user.username || "").toLowerCase();
-        const gName = (m.user.globalName || "").toLowerCase();
+        if (m.user.bot) return false; // Ignore Draftbot et les autres bots !
 
-        return dName.includes(cleanInput) || cleanInput.includes(dName) ||
+        // Nettoyage des crochets/accolades du pseudo (ex: "{Acting Boss} Mr. Van Halen" -> "Mr. Van Halen")
+        const cleanDisplayName = m.displayName.replace(/[\{\[\(].*?[\}\]\)]/g, '').trim().toLowerCase();
+        const uName = m.user.username.toLowerCase();
+        const gName = (m.user.globalName || '').toLowerCase();
+
+        return cleanDisplayName.includes(cleanInput) || cleanInput.includes(cleanDisplayName) ||
                uName.includes(cleanInput) || cleanInput.includes(uName) ||
                gName.includes(cleanInput) || cleanInput.includes(gName);
     });
 
-    if (foundMember) {
-        console.log(`[DEBUG - DISCORD] ✅ Membre trouvé dans le cache: ${foundMember.displayName}`);
-        return foundMember;
-    }
-
-    // 4. Si toujours rien, on utilise l'API de recherche Discord en dernier recours
-    try {
-        const searchResult = await guild.members.search({ query: cleanInput, limit: 1 });
-        const firstSearch = searchResult.first();
-        if (firstSearch) {
-            console.log(`[DEBUG - DISCORD] ✅ Membre trouvé via l'API de recherche: ${firstSearch.displayName}`);
-            return firstSearch;
-        }
-    } catch (err) {
-        console.log(`[DEBUG - DISCORD] ❌ Erreur API search:`, err.message);
-    }
-
-    console.log(`[DEBUG - DISCORD] 🚨 AUCUN membre trouvé pour "${cleanInput}" !`);
-    return null;
+    return foundMember || null;
 }
 module.exports = async (bot, interaction) => {
     try {
