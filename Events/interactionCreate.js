@@ -25,24 +25,36 @@ const COLUMN_MAPPING = {
 
 async function updateHeistStats(sheets, spreadsheetId, participants, heistType) {
     const colLetter = COLUMN_MAPPING[heistType.toLowerCase()];
-    if (!colLetter) return;
+    if (!colLetter) {
+        console.log("Type de braquage non reconnu :", heistType);
+        return;
+    }
+
+    if (!participants || participants.length === 0) {
+        console.log("Aucun membre trouvé pour mettre à jour le Sheet.");
+        return;
+    }
 
     try {
+        // Ajuste 'Feuille 1' par le nom exact de l'onglet si besoin
+        const rangeSearch = 'B5:B34'; 
+        
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: 'B5:B34', 
+            range: rangeSearch, 
         });
 
         const rows = response.data.values || [];
 
         for (const member of participants) {
-            // Extraction du nom à comparer
+            // Nom du joueur à chercher (displayName Discord)
             const targetName = typeof member === 'string' ? member.toLowerCase() : member.displayName.toLowerCase();
 
             const rowIndex = rows.findIndex(row => {
                 if (!row[0]) return false;
                 const sheetName = row[0].trim().toLowerCase();
-                // Vérifie si l'un contient l'autre (ex: "Eddie Van Halen" contient "van halen")
+                
+                // Compare par sous-chaîne (ex: "van halen" correspond à "Eddie Van Halen")
                 return sheetName.includes(targetName) || targetName.includes(sheetName);
             });
 
@@ -65,10 +77,13 @@ async function updateHeistStats(sheets, spreadsheetId, participants, heistType) 
                         values: [[currentValue + 1]]
                     }
                 });
+                console.log(`Sheet mis à jour pour ${targetName} à la ligne ${actualRow}, colonne ${colLetter}`);
+            } else {
+                console.log(`Aucune correspondance dans le Sheet pour : ${targetName}`);
             }
         }
     } catch (err) {
-        console.error("Erreur lors de la mise à jour Google Sheets :", err);
+        console.error("Erreur Google Sheets :", err);
     }
 }
 async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule, grade = "Recrue" }) {
@@ -116,66 +131,59 @@ async function getTargetMember(guild, input) {
     if (!input) return null;
     const cleanInput = input.trim().toLowerCase();
     
-    // 1. Recherche par ID ou Mention Discord (@nom)
+    console.log(`\n[DEBUG - DISCORD] 🔎 Recherche du membre pour l'input : "${cleanInput}"`);
+
+    // 1. Recherche par mention directe ou ID
     const userIdMatch = cleanInput.match(/\d{17,19}/);
     if (userIdMatch) {
         try {
-            return await guild.members.fetch(userIdMatch[0]);
-        } catch (e) {}
+            const m = await guild.members.fetch(userIdMatch[0]);
+            console.log(`[DEBUG - DISCORD] ✅ Membre trouvé via ID: ${m.displayName}`);
+            return m;
+        } catch (e) {
+            console.log(`[DEBUG - DISCORD] ❌ Erreur ID:`, e.message);
+        }
     }
 
-    // Assurer que le cache est chargé
-    try { await guild.members.fetch(); } catch (e) {}
+    // 2. On force le bot à télécharger TOUS les membres du serveur
+    try {
+        await guild.members.fetch();
+        console.log(`[DEBUG - DISCORD] 🔄 Cache mis à jour, total membres sur le serveur: ${guild.members.cache.size}`);
+    } catch (e) {
+        console.error("[DEBUG - DISCORD] ❌ Erreur fetch membres:", e.message);
+    }
 
-    // 2. Recherche partielle dans le cache (nom RP, pseudo serveur, username)
-    const cachedMember = guild.members.cache.find(m => {
-        const displayName = m.displayName.toLowerCase();
-        const username = m.user.username.toLowerCase();
-        const globalName = (m.user.globalName || '').toLowerCase();
+    // 3. Recherche dans le cache avec une méthode très souple
+    const foundMember = guild.members.cache.find(m => {
+        const dName = (m.displayName || "").toLowerCase();
+        const uName = (m.user.username || "").toLowerCase();
+        const gName = (m.user.globalName || "").toLowerCase();
 
-        return displayName.includes(cleanInput) || 
-               cleanInput.includes(displayName) ||
-               username.includes(cleanInput) ||
-               globalName.includes(cleanInput);
+        return dName.includes(cleanInput) || cleanInput.includes(dName) ||
+               uName.includes(cleanInput) || cleanInput.includes(uName) ||
+               gName.includes(cleanInput) || cleanInput.includes(gName);
     });
 
-    if (cachedMember) return cachedMember;
+    if (foundMember) {
+        console.log(`[DEBUG - DISCORD] ✅ Membre trouvé dans le cache: ${foundMember.displayName}`);
+        return foundMember;
+    }
 
-    // 3. Fallback Recherche API
+    // 4. Si toujours rien, on utilise l'API de recherche Discord en dernier recours
     try {
-        const members = await guild.members.search({ query: cleanInput, limit: 1 });
-        return members.first() || null;
+        const searchResult = await guild.members.search({ query: cleanInput, limit: 1 });
+        const firstSearch = searchResult.first();
+        if (firstSearch) {
+            console.log(`[DEBUG - DISCORD] ✅ Membre trouvé via l'API de recherche: ${firstSearch.displayName}`);
+            return firstSearch;
+        }
     } catch (err) {
-        return null;
+        console.log(`[DEBUG - DISCORD] ❌ Erreur API search:`, err.message);
     }
+
+    console.log(`[DEBUG - DISCORD] 🚨 AUCUN membre trouvé pour "${cleanInput}" !`);
+    return null;
 }
-
-async function getTargetMember(guild, input) {
-    if (!input) return null;
-    const cleanInput = input.trim();
-    
-    const userIdMatch = cleanInput.match(/\d{17,19}/);
-    if (userIdMatch) {
-        try {
-            return await guild.members.fetch(userIdMatch[0]);
-        } catch (e) {}
-    }
-
-    const cachedMember = guild.members.cache.find(m => 
-        m.displayName.toLowerCase() === cleanInput.toLowerCase() ||
-        m.user.username.toLowerCase() === cleanInput.toLowerCase()
-    );
-    if (cachedMember) return cachedMember;
-
-    try {
-        const members = await guild.members.search({ query: cleanInput, limit: 1 });
-        return members.first() || null;
-    } catch (err) {
-        console.error("Erreur recherche membre :", err);
-        return null;
-    }
-}
-
 module.exports = async (bot, interaction) => {
     try {
         if (interaction.isCommand() || interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
