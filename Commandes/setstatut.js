@@ -43,7 +43,6 @@ module.exports = {
         const typeStr = interaction.options.getString("type") || "Playing";
         const status = interaction.options.getString("statut") || "online";
 
-        // Convertir le texte en enum ActivityType de Discord.js v14
         let activityType = Discord.ActivityType.Playing;
         if (typeStr === "Listening") activityType = Discord.ActivityType.Listening;
         if (typeStr === "Watching") activityType = Discord.ActivityType.Watching;
