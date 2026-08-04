@@ -14,7 +14,6 @@ const ROLE_MORT_RP = "1508389958006865931";
 
 const WEBHOOK_SHEET_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1vD5SsRFLov-la8ntiEOO-qxW2cwcHpZyo6U0LUsRTqNABmgKMKJDhS/exec";
 
-// 🔹 Grade prédéfini automatiquement sur "Recrue" si non spécifié
 async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule, grade = "Recrue" }) {
     if (!WEBHOOK_SHEET_URL || !nomDiscord) return;
     try {
@@ -64,9 +63,7 @@ async function getTargetMember(guild, input) {
     if (userIdMatch) {
         try {
             return await guild.members.fetch(userIdMatch[0]);
-        } catch (e) {
-            // Membre introuvable par ID
-        }
+        } catch (e) {}
     }
 
     try {
@@ -80,7 +77,6 @@ async function getTargetMember(guild, input) {
 
 module.exports = async (bot, interaction) => {
     try {
-        // --- 1. GESTION DES COMMANDES SLASH ---
         if (interaction.isCommand() || interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
             try {
                 const command = bot.commands?.get(interaction.commandName) || require(`../Commandes/${interaction.commandName}`);
@@ -97,9 +93,68 @@ module.exports = async (bot, interaction) => {
             return;
         }
 
-        // --- 2. GESTION DES BOUTONS ---
         if (interaction.isButton()) {
-            if (interaction.customId === "btn_absence") {
+            if (interaction.customId.startsWith("btn_braquage_")) {
+                const typeBraquage = interaction.customId.replace("btn_braquage_", "");
+
+                let titreModal = "Déclaration de Braquage";
+                if (typeBraquage === "atm") titreModal = "Braquage d'ATM";
+                else if (typeBraquage === "conteneur") titreModal = "Braquage de Conteneur";
+                else if (typeBraquage === "superette") titreModal = "Braquage de Supérette";
+                else if (typeBraquage === "fleeca") titreModal = "Braquage de Fleeca";
+                else if (typeBraquage === "bijouterie") titreModal = "Braquage de Bijouterie";
+                else if (typeBraquage === "banque_centrale") titreModal = "Braquage de Banque Centrale";
+
+                const modal = new Discord.ModalBuilder()
+                    .setCustomId(`modal_braquage_${typeBraquage}`)
+                    .setTitle(titreModal);
+
+                const inputBraqueurs = new Discord.TextInputBuilder()
+                    .setCustomId("input_braqueurs")
+                    .setLabel("Braqueurs (mentions, pseudos ou IDs)")
+                    .setPlaceholder("Ex: @Membre1, @Membre2")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputOtages = new Discord.TextInputBuilder()
+                    .setCustomId("input_otages")
+                    .setLabel("Nombre d'otages")
+                    .setPlaceholder("Ex: 3 (ou 0)")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputLieu = new Discord.TextInputBuilder()
+                    .setCustomId("input_lieu")
+                    .setLabel("Lieu")
+                    .setPlaceholder("Ex: Supérette Vinewood")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputAutorisation = new Discord.TextInputBuilder()
+                    .setCustomId("input_autorisation")
+                    .setLabel("Autorisation donnée par")
+                    .setPlaceholder("Ex: @Leader")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                const inputGain = new Discord.TextInputBuilder()
+                    .setCustomId("input_gain_et_coffre")
+                    .setLabel("Argent sale gagné & Transféré au coffre")
+                    .setPlaceholder("Ex: 150000$ | Oui")
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setRequired(true);
+
+                modal.addComponents(
+                    new Discord.ActionRowBuilder().addComponents(inputBraqueurs),
+                    new Discord.ActionRowBuilder().addComponents(inputOtages),
+                    new Discord.ActionRowBuilder().addComponents(inputLieu),
+                    new Discord.ActionRowBuilder().addComponents(inputAutorisation),
+                    new Discord.ActionRowBuilder().addComponents(inputGain)
+                );
+
+                return await interaction.showModal(modal);
+            }
+            else if (interaction.customId === "btn_absence") {
                 const modal = new Discord.ModalBuilder()
                     .setCustomId("modal_absence")
                     .setTitle("Déclaration d'absence");
@@ -305,7 +360,6 @@ module.exports = async (bot, interaction) => {
             return;
         }
 
-        // --- 3. GESTION DES MENUS DÉROULANTS ---
         if (interaction.isStringSelectMenu()) {
             if (interaction.customId.startsWith("select_coffre_")) {
                 const actionType = interaction.customId.replace("select_coffre_", "");
@@ -341,16 +395,13 @@ module.exports = async (bot, interaction) => {
             return;
         }
 
-        // --- 4. GESTION DES MODAUX (MODAL SUBMIT) ---
         if (interaction.type === Discord.InteractionType.ModalSubmit) {
             const emetteurMention = interaction.user.toString();
             const today = new Date();
             const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
-            // Acknowledgment immédiat pour éviter le timeout de 3s
             await interaction.deferReply();
 
-            // MODAL ABSENCE
             if (interaction.customId === "modal_absence") {
                 const dateDebut = interaction.fields.getTextInputValue("input_date_debut");
                 const dateFin = interaction.fields.getTextInputValue("input_date_fin");
@@ -369,7 +420,6 @@ module.exports = async (bot, interaction) => {
                 });
             }
 
-            // MODAL COFFRE (DEPOT ET RETRAIT)
             else if (interaction.customId.startsWith("modal_depot_") || interaction.customId.startsWith("modal_retrait_")) {
                 const isDepot = interaction.customId.startsWith("modal_depot_");
                 const keyCoffre = interaction.customId.replace(isDepot ? "modal_depot_" : "modal_retrait_", "");
@@ -417,7 +467,6 @@ module.exports = async (bot, interaction) => {
                 });
             }
 
-            // MODAL AVERTISSEMENTS (WARN)
             else if (interaction.customId.startsWith("modal_avertissement_")) {
                 const level = interaction.customId.replace("modal_avertissement_", "");
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
@@ -446,7 +495,6 @@ module.exports = async (bot, interaction) => {
 
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
-
             // MODAL MISE EN GARDE
             else if (interaction.customId === "modal_mise_en_garde") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
