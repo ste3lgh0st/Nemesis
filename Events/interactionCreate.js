@@ -23,6 +23,7 @@ const {
     ButtonStyle, 
     MessageFlags 
 } = require("discord.js");
+
 async function getTargetMember(guild, input) {
     if (!input || !guild) return null;
     const cleanInput = input.replace(/[<@!>]/g, "").trim();
@@ -30,8 +31,7 @@ async function getTargetMember(guild, input) {
     if (/^\d{17,19}$/.test(cleanInput)) {
         try {
             return await guild.members.fetch(cleanInput);
-        } catch {
-        }
+        } catch {}
     }
 
     try {
@@ -115,14 +115,17 @@ module.exports = async (client, interaction, dependencies = {}) => {
             year: "numeric"
         });
 
+        // ==========================================
+        // GESTION DES BOUTONS
+        // ==========================================
         if (interaction.isButton()) {
             const { customId } = interaction;
-
 
             if (customId.startsWith("btn_warn_") || customId.startsWith("btn_braquage_") || [
                 "btn_meg", "btn_convocation", "btn_sanction", 
                 "btn_mort_rp", "btn_blacklist", "btn_promotion", 
-                "btn_retrogradation", "btn_prime", "btn_patrouille", "btn_ronde"
+                "btn_retrogradation", "btn_prime", "btn_patrouille", "btn_ronde",
+                "btn_absence"
             ].includes(customId)) {
 
                 let modalId = "";
@@ -144,6 +147,15 @@ module.exports = async (client, interaction, dependencies = {}) => {
                     fields = [
                         { id: "input_membre", label: "Membre ciblé (Mention, ID ou Nom)" },
                         { id: "input_motif", label: "Raison / Rappel à l'ordre", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId === "btn_absence") {
+                    modalId = "modal_absence";
+                    modalTitle = "Déclaration d'Absence";
+                    fields = [
+                        { id: "input_date_debut", label: "Date de début (ex: 12/08)" },
+                        { id: "input_date_fin", label: "Date de fin (ex: 20/08)" },
+                        { id: "input_motif", label: "Motif de l'absence", style: TextInputStyle.Paragraph }
                     ];
                 }
                 else if (customId === "btn_convocation") {
@@ -264,6 +276,9 @@ module.exports = async (client, interaction, dependencies = {}) => {
             }
         }
 
+        // ==========================================
+        // GESTION DES MODAUX
+        // ==========================================
         if (interaction.isModalSubmit()) {
             await interaction.deferReply();
 
@@ -294,7 +309,6 @@ module.exports = async (client, interaction, dependencies = {}) => {
                 return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-
             if (interaction.customId === "modal_mise_en_garde") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const motif = interaction.fields.getTextInputValue("input_motif");
@@ -312,6 +326,20 @@ module.exports = async (client, interaction, dependencies = {}) => {
                 const template = `# MISE EN GARDE \n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Raison / Rappel :**\n${motif}\n\nLa discipline est le pilier de notre Famille. Ceci est un pré-avertissement formel afin de vous rappeler les règles de The Olympius Syndicate.\n\nPrenez ce rappel au sérieux pour éviter tout avertissement officiel (warn) ou sanction plus lourde.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
                 return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+            }
+
+            if (interaction.customId === "modal_absence") {
+                const dateDebut = interaction.fields.getTextInputValue("input_date_debut");
+                const dateFin = interaction.fields.getTextInputValue("input_date_fin");
+                const motif = interaction.fields.getTextInputValue("input_motif");
+
+                const template = `# DÉCLARATION D'ABSENCE\n\n` +
+                    `**Membre :** ${emetteurMention}\n` +
+                    `**Période :** Du ${dateDebut} au ${dateFin}\n` +
+                    `**Motif :**\n${motif}\n\n` +
+                    `*Absence enregistrée par la Direction.*`;
+
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users"] } });
             }
 
             if (interaction.customId === "modal_convocation") {
@@ -357,7 +385,11 @@ module.exports = async (client, interaction, dependencies = {}) => {
                 try {
                     dateHeure = interaction.fields.getTextInputValue("input_date_heure");
                 } catch {
-                    dateHeure = interaction.fields.getTextInputValue("input_date");
+                    try {
+                        dateHeure = interaction.fields.getTextInputValue("input_date");
+                    } catch {
+                        dateHeure = `${dateFormatted} à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+                    }
                 }
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
@@ -371,7 +403,7 @@ module.exports = async (client, interaction, dependencies = {}) => {
 
                 envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Mort RP" }).catch(err => console.error("Erreur Sheet Mort RP :", err));
 
-                const template = `# ÉXÉCUTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Exécuté par :** ${emetteurMention}\n\n**Date et Heure du décès :** ${dateHeure}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nQue la mort de notre membre serve d'exemple aux autres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+                const template = `# EXÉCUTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Exécuté par :** ${emetteurMention}\n\n**Date et Heure du décès :** ${dateHeure}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nQue la mort de notre membre serve d'exemple aux autres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
                 return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
