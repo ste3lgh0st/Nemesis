@@ -30,6 +30,7 @@ async function sendHeistToSheets(heistType, braqueursList) {
         console.error("[APPS SCRIPT] ❌ Erreur lors de l'envoi :", err);
     }
 }
+
 async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule, grade = "Recrue" }) {
     if (!WEBHOOK_SHEET_URL || !nomDiscord) return;
     try {
@@ -87,11 +88,10 @@ async function getTargetMember(guild, input) {
     // 2. Chargement du cache des membres
     try { await guild.members.fetch(); } catch (e) {}
 
-    // 3. Recherche dans les membres Humains uniquement (exclut tous les bots)
+    // 3. Recherche dans les membres Humains uniquement
     const foundMember = guild.members.cache.find(m => {
-        if (m.user.bot) return false; // Ignore Draftbot et les autres bots !
+        if (m.user.bot) return false;
 
-        // Nettoyage des crochets/accolades du pseudo (ex: "{Acting Boss} Mr. Van Halen" -> "Mr. Van Halen")
         const cleanDisplayName = m.displayName.replace(/[\{\[\(].*?[\}\]\)]/g, '').trim().toLowerCase();
         const uName = m.user.username.toLowerCase();
         const gName = (m.user.globalName || '').toLowerCase();
@@ -103,8 +103,10 @@ async function getTargetMember(guild, input) {
 
     return foundMember || null;
 }
+
 module.exports = async (bot, interaction) => {
     try {
+        // GESTION DES COMMANDES SLASH
         if (interaction.isCommand() || interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
             try {
                 const command = bot.commands?.get(interaction.commandName) || require(`../Commandes/${interaction.commandName}`);
@@ -121,6 +123,7 @@ module.exports = async (bot, interaction) => {
             return;
         }
 
+        // GESTION DES BOUTONS
         if (interaction.isButton()) {
             if (interaction.customId.startsWith("btn_braquage_")) {
                 const typeBraquage = interaction.customId.replace("btn_braquage_", "");
@@ -388,6 +391,7 @@ module.exports = async (bot, interaction) => {
             return;
         }
 
+        // GESTION DES MENUS DE SÉLECTION
         if (interaction.isStringSelectMenu()) {
             if (interaction.customId.startsWith("select_coffre_")) {
                 const actionType = interaction.customId.replace("select_coffre_", "");
@@ -423,10 +427,11 @@ module.exports = async (bot, interaction) => {
             return;
         }
 
+        // GESTION DES MODALS (FORMULAIRES)
         if (interaction.type === Discord.InteractionType.ModalSubmit) {
             const emetteurMention = interaction.user.toString();
-            const today = new Date();
-            const dateFormatted = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+            const now = new Date();
+            const dateFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
             await interaction.deferReply();
 
@@ -524,7 +529,6 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            // MODAL MISE EN GARDE
             else if (interaction.customId === "modal_mise_en_garde") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const motif = interaction.fields.getTextInputValue("input_motif");
@@ -545,7 +549,6 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            // MODAL CONVOCATION
             else if (interaction.customId === "modal_convocation") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const heure = interaction.fields.getTextInputValue("input_heure");
@@ -568,7 +571,6 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            // MODAL SANCTION
             else if (interaction.customId === "modal_sanction") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const duree = interaction.fields.getTextInputValue("input_duree");
@@ -586,7 +588,6 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            // MODAL MORT RP
             else if (interaction.customId === "modal_mort_rp") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 let dateHeure = "";
@@ -613,7 +614,6 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            // MODAL BLACKLIST
             else if (interaction.customId === "modal_blacklist") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const dureeInput = interaction.fields.getTextInputValue("input_duree").trim();
@@ -645,7 +645,6 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            // MODAL PROMOTION
             else if (interaction.customId === "modal_promotion") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const gradeInput = interaction.fields.getTextInputValue("input_grade");
@@ -689,7 +688,6 @@ module.exports = async (bot, interaction) => {
                 });
             }
 
-            // MODAL RÉTROGRADATION
             else if (interaction.customId === "modal_retrogradation") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const gradeInput = interaction.fields.getTextInputValue("input_grade");
@@ -733,7 +731,6 @@ module.exports = async (bot, interaction) => {
                 });
             }
 
-            // MODAL PRIME
             else if (interaction.customId === "modal_prime") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const motif = interaction.fields.getTextInputValue("input_motif");
@@ -746,149 +743,81 @@ module.exports = async (bot, interaction) => {
                 await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            // DÉCLENCHEMENT DU MODAL VIA BOUTON
-else if (interaction.customId.startsWith("btn_braquage_")) {
-    const typeBraquage = interaction.customId.replace("btn_braquage_", "");
+            else if (interaction.customId.startsWith("modal_braquage_")) {
+                const typeBraquage = interaction.customId.replace("modal_braquage_", "");
 
-    let titreModal = "Déclaration de Braquage";
-    if (typeBraquage === "atm") titreModal = "Braquage d'ATM";
-    else if (typeBraquage === "conteneur") titreModal = "Braquage de Conteneur";
-    else if (typeBraquage === "superette") titreModal = "Braquage de Supérette";
-    else if (typeBraquage === "fleeca") titreModal = "Braquage de Fleeca";
-    else if (typeBraquage === "bijouterie") titreModal = "Braquage de Bijouterie";
-    else if (typeBraquage === "banque_centrale") titreModal = "Braquage de Banque Centrale";
+                const braqueursInput = interaction.fields.getTextInputValue("input_braqueurs");
+                const otagesInput = interaction.fields.getTextInputValue("input_otages");
+                const lieuInput = interaction.fields.getTextInputValue("input_lieu");
+                const autoInput = interaction.fields.getTextInputValue("input_autorisation");
+                const gainEtCoffreInput = interaction.fields.getTextInputValue("input_gain_et_coffre");
 
-    const modal = new Discord.ModalBuilder()
-        .setCustomId(`modal_braquage_${typeBraquage}`)
-        .setTitle(titreModal);
+                let gain = gainEtCoffreInput;
+                let transfereCoffre = "Non";
 
-    const inputBraqueurs = new Discord.TextInputBuilder()
-        .setCustomId("input_braqueurs")
-        .setLabel("Braqueurs (mentions, pseudos ou IDs)")
-        .setPlaceholder("Ex: @Membre1, @Membre2 ou nonop, alex")
-        .setStyle(Discord.TextInputStyle.Short)
-        .setRequired(true);
+                if (gainEtCoffreInput.includes("|")) {
+                    const parts = gainEtCoffreInput.split("|");
+                    gain = parts[0].trim();
+                    transfereCoffre = parts[1].trim().toLowerCase().includes("oui") ? "Oui" : "Non";
+                } else if (gainEtCoffreInput.toLowerCase().endsWith("oui")) {
+                    transfereCoffre = "Oui";
+                    gain = gainEtCoffreInput.replace(/oui/i, "").trim();
+                } else if (gainEtCoffreInput.toLowerCase().endsWith("non")) {
+                    transfereCoffre = "Non";
+                    gain = gainEtCoffreInput.replace(/non/i, "").trim();
+                }
 
-    const inputOtages = new Discord.TextInputBuilder()
-        .setCustomId("input_otages")
-        .setLabel("Nombre d'otages")
-        .setPlaceholder("Ex: 3 (ou 0 si aucun)")
-        .setStyle(Discord.TextInputStyle.Short)
-        .setRequired(true);
+                const listeBraqueursBrute = braqueursInput.split(/[,/]/).map(b => b.trim());
+                let braqueursFormates = [];
+                let braqueursMembres = [];
 
-    const inputLieu = new Discord.TextInputBuilder()
-        .setCustomId("input_lieu")
-        .setLabel("Lieu")
-        .setPlaceholder("Ex: Supérette Vinewood / Fleeca Legion Square")
-        .setStyle(Discord.TextInputStyle.Short)
-        .setRequired(true);
+                for (const item of listeBraqueursBrute) {
+                    if (!item) continue;
+                    const member = await getTargetMember(interaction.guild, item);
+                    if (member) {
+                        braqueursFormates.push(member.toString());
+                        braqueursMembres.push(member);
+                    } else {
+                        braqueursFormates.push(item);
+                    }
+                }
+                const texteBraqueurs = braqueursFormates.join(" / ");
 
-    const inputAutorisation = new Discord.TextInputBuilder()
-        .setCustomId("input_autorisation")
-        .setLabel("Autorisation donnée par (mention/pseudo)")
-        .setPlaceholder("Ex: @Leader ou nonop")
-        .setStyle(Discord.TextInputStyle.Short)
-        .setRequired(true);
+                if (typeof updateHeistStats === 'function' && typeof sheets !== 'undefined' && typeof SPREADSHEET_ID !== 'undefined') {
+                    await updateHeistStats(sheets, SPREADSHEET_ID, braqueursMembres, typeBraquage);
+                }
 
-    const inputGain = new Discord.TextInputBuilder()
-        .setCustomId("input_gain_et_coffre")
-        .setLabel("Argent sale gagné & Transféré au coffre")
-        .setPlaceholder("Ex: 150000$ | Oui (ou Non)")
-        .setStyle(Discord.TextInputStyle.Short)
-        .setRequired(true);
+                sendHeistToSheets(typeBraquage, braqueursFormates);
 
-    modal.addComponents(
-        new Discord.ActionRowBuilder().addComponents(inputBraqueurs),
-        new Discord.ActionRowBuilder().addComponents(inputOtages),
-        new Discord.ActionRowBuilder().addComponents(inputLieu),
-        new Discord.ActionRowBuilder().addComponents(inputAutorisation),
-        new Discord.ActionRowBuilder().addComponents(inputGain)
-    );
+                const autoMember = await getTargetMember(interaction.guild, autoInput);
+                const autoMention = autoMember ? autoMember.toString() : autoInput;
 
-    // Ne PAS mettre de deferReply() ou deferUpdate() avant cette ligne !
-    await interaction.showModal(modal);
-}
+                let intituleTarget = "";
+                switch (typeBraquage) {
+                    case "atm": intituleTarget = "d'ATM"; break;
+                    case "conteneur": intituleTarget = "de conteneur"; break;
+                    case "superette": intituleTarget = "de supérette"; break;
+                    case "fleeca": intituleTarget = "de Fleeca"; break;
+                    case "bijouterie": intituleTarget = "de Bijouterie"; break;
+                    case "pacific":
+                    case "banque_centrale": intituleTarget = "de Banque Centrale"; break;
+                    default: intituleTarget = "de braquage";
+                }
 
-           // MODAL DÉCLARATION BRAQUAGE
-else if (interaction.customId.startsWith("modal_braquage_")) {
-    const typeBraquage = interaction.customId.replace("modal_braquage_", "");
+                const messageFinal = `**__Braquage ${intituleTarget} :__**\n\n` +
+                    `Braqueurs : ${texteBraqueurs}\n` +
+                    `Nombre d'otages : ${otagesInput}\n` +
+                    `Lieu : ${lieuInput}\n` +
+                    `Autorisation : ${autoMention}\n` +
+                    `Argent sale gagné : ${gain}\n` +
+                    `Transféré au coffre : ${transfereCoffre}`;
 
-    const braqueursInput = interaction.fields.getTextInputValue("input_braqueurs");
-    const otagesInput = interaction.fields.getTextInputValue("input_otages");
-    const lieuInput = interaction.fields.getTextInputValue("input_lieu");
-    const autoInput = interaction.fields.getTextInputValue("input_autorisation");
-    const gainEtCoffreInput = interaction.fields.getTextInputValue("input_gain_et_coffre");
+                await interaction.editReply({
+                    content: messageFinal,
+                    allowedMentions: { parse: ["users", "roles"] }
+                });
+            }
 
-    // Traitement du gain et du coffre (Format attendu : "150000$ | Oui" ou séparé par un espace/virgule)
-    let gain = gainEtCoffreInput;
-    let transfereCoffre = "Non";
-
-    if (gainEtCoffreInput.includes("|")) {
-        const parts = gainEtCoffreInput.split("|");
-        gain = parts[0].trim();
-        transfereCoffre = parts[1].trim().toLowerCase().includes("oui") ? "Oui" : "Non";
-    } else if (gainEtCoffreInput.toLowerCase().endsWith("oui")) {
-        transfereCoffre = "Oui";
-        gain = gainEtCoffreInput.replace(/oui/i, "").trim();
-    } else if (gainEtCoffreInput.toLowerCase().endsWith("non")) {
-        transfereCoffre = "Non";
-        gain = gainEtCoffreInput.replace(/non/i, "").trim();
-    }
-
-    // Formatage des mentions ET récupération des membres pour le Sheet
-    const listeBraqueursBrute = braqueursInput.split(/[,/]/).map(b => b.trim());
-    let braqueursFormates = [];
-    let braqueursMembres = []; // Tableau contenant les objets GuildMember trouvés
-
-    for (const item of listeBraqueursBrute) {
-        if (!item) continue;
-        const member = await getTargetMember(interaction.guild, item);
-        if (member) {
-            braqueursFormates.push(member.toString());
-            braqueursMembres.push(member); // Ajout pour le Sheet
-        } else {
-            braqueursFormates.push(item);
-        }
-    }
-    const texteBraqueurs = braqueursFormates.join(" / ");
-
-    // MAJ Google Sheets (incrémentation du nombre de braquages +1)
-    if (typeof updateHeistStats === 'function' && typeof sheets !== 'undefined' && typeof SPREADSHEET_ID !== 'undefined') {
-        await updateHeistStats(sheets, SPREADSHEET_ID, braqueursMembres, typeBraquage);
-    }
-
-    // Formatage de la mention d'autorisation
-    const autoMember = await getTargetMember(interaction.guild, autoInput);
-    const autoMention = autoMember ? autoMember.toString() : autoInput;
-
-    // Titre selon la cible avec gestion de l'apostrophe pour ATM
-    let intituleTarget = "";
-    switch (typeBraquage) {
-        case "atm": intituleTarget = "d'ATM"; break;
-        case "conteneur": intituleTarget = "de conteneur"; break;
-        case "superette": intituleTarget = "de supérette"; break;
-        case "fleeca": intituleTarget = "de Fleeca"; break;
-        case "bijouterie": intituleTarget = "de Bijouterie"; break;
-        case "pacific":
-        case "banque_centrale": intituleTarget = "de Banque Centrale"; break;
-        default: intituleTarget = "de braquage";
-    }
-
-    const messageFinal = `**__Braquage ${intituleTarget} :__**\n\n` +
-        `Braqueurs : ${texteBraqueurs}\n` +
-        `Nombre d'otages : ${otagesInput}\n` +
-        `Lieu : ${lieuInput}\n` +
-        `Autorisation : ${autoMention}\n` +
-        `Argent sale gagné : ${gain}\n` +
-        `Transféré au coffre : ${transfereCoffre}`;
-
-    await interaction.editReply({
-        content: messageFinal,
-        allowedMentions: { parse: ["users", "roles"] }
-    });
-}
-
-            // MODAL PRISE DE PATROUILLE
             else if (interaction.customId === "modal_patrouille") {
                 const leaderInput = interaction.fields.getTextInputValue("input_leader");
                 const membresInput = interaction.fields.getTextInputValue("input_membres");
@@ -916,7 +845,6 @@ else if (interaction.customId.startsWith("modal_braquage_")) {
                 });
             }
 
-            // MODAL PRISE DE RONDE
             else if (interaction.customId === "modal_ronde") {
                 const sectionInput = interaction.fields.getTextInputValue("input_section");
                 const membresInput = interaction.fields.getTextInputValue("input_membres");
@@ -943,7 +871,7 @@ else if (interaction.customId.startsWith("modal_braquage_")) {
 
     } catch (error) {
         console.error("Erreur lors du traitement de l'interaction :", error);
-        
+
         const errorPayload = { 
             content: "❌ Une erreur est survenue lors de l'exécution de cette action.", 
             flags: Discord.MessageFlags.Ephemeral 
