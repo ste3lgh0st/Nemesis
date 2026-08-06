@@ -14,509 +14,274 @@ const ROLE_MORT_RP = "1508389958006865931";
 
 const WEBHOOK_SHEET_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1vD5SsRFLov-la8ntiEOO-qxW2cwcHpZyo6U0LUsRTqNABmgKMKJDhS/exec";
 
-async function sendHeistToSheets(heistType, braqueursList) {
-    try {
-        await fetch(WEBHOOK_SHEET_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'heist',
-                heistType: heistType,
-                braqueurs: braqueursList
-            })
-        });
-        console.log("[APPS SCRIPT] ✅ Braquage enregistré sur Google Sheets.");
-    } catch (err) {
-        console.error("[APPS SCRIPT] ❌ Erreur lors de l'envoi :", err);
-    }
-}
-
-async function envoyerAuGoogleSheet(nomDiscord, { texteAbsence, sanctionIntitule, grade = "Recrue" }) {
-    if (!WEBHOOK_SHEET_URL || !nomDiscord) return;
-    try {
-        await fetch(WEBHOOK_SHEET_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                nomDiscord: nomDiscord,
-                grade: grade,
-                texteAbsence: texteAbsence || null,
-                sanctionIntitule: sanctionIntitule || null
-            })
-        });
-    } catch (err) {
-        console.error("Erreur d'envoi vers Google Sheet :", err);
-    }
-}
-
-async function envoyerBlacklistAuSheet({ nomPrenom, duree, date, lienDiscord, raison }) {
-    if (!WEBHOOK_SHEET_URL) return;
-    try {
-        await fetch(WEBHOOK_SHEET_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                action: "blacklist",
-                nomPrenom: nomPrenom,
-                neLe: "//",
-                sexe: "Homme",
-                taille: "//",
-                duree: duree,
-                date: date,
-                lienDiscord: lienDiscord,
-                raison: raison
-            })
-        });
-    } catch (err) {
-        console.error("Erreur d'envoi Blacklist vers Sheet :", err);
-    }
-}
-
+const { 
+    ModalBuilder, 
+    TextInputBuilder, 
+    TextInputStyle, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    MessageFlags 
+} = require("discord.js");
 async function getTargetMember(guild, input) {
-    if (!input) return null;
-    const cleanInput = input.trim().toLowerCase();
+    if (!input || !guild) return null;
+    const cleanInput = input.replace(/[<@!>]/g, "").trim();
 
-    // 1. Recherche par ID ou Mention (@User)
-    const userIdMatch = cleanInput.match(/\d{17,19}/);
-    if (userIdMatch) {
+    if (/^\d{17,19}$/.test(cleanInput)) {
         try {
-            const m = await guild.members.fetch(userIdMatch[0]);
-            if (m && !m.user.bot) return m;
-        } catch (e) {}
+            return await guild.members.fetch(cleanInput);
+        } catch {
+        }
     }
 
-    // 2. Chargement du cache des membres
-    try { await guild.members.fetch(); } catch (e) {}
+    try {
+        const members = await guild.members.fetch({ query: cleanInput, limit: 1 });
+        return members.first() || null;
+    } catch {
+        return null;
+    }
+}
 
-    // 3. Recherche dans les membres Humains uniquement
-    const foundMember = guild.members.cache.find(m => {
-        if (m.user.bot) return false;
+function createCustomModal(customId, title, fields) {
+    const modal = new ModalBuilder()
+        .setCustomId(customId)
+        .setTitle(title);
 
-        const cleanDisplayName = m.displayName.replace(/[\{\[\(].*?[\}\]\)]/g, '').trim().toLowerCase();
-        const uName = m.user.username.toLowerCase();
-        const gName = (m.user.globalName || '').toLowerCase();
+    const rows = fields.map(field => {
+        const input = new TextInputBuilder()
+            .setCustomId(field.id)
+            .setLabel(field.label)
+            .setStyle(field.style || TextInputStyle.Short)
+            .setPlaceholder(field.placeholder || "")
+            .setRequired(field.required ?? true);
 
-        return cleanDisplayName.includes(cleanInput) || cleanInput.includes(cleanDisplayName) ||
-               uName.includes(cleanInput) || cleanInput.includes(uName) ||
-               gName.includes(cleanInput) || cleanInput.includes(gName);
+        if (field.value) input.setValue(field.value);
+
+        return new ActionRowBuilder().addComponents(input);
     });
 
-    return foundMember || null;
+    modal.addComponents(rows);
+    return modal;
 }
 
-module.exports = async (bot, interaction) => {
+async function updateHierarchyRole(targetMember, gradeInput, hierarchie) {
+    if (!targetMember || !gradeInput || !hierarchie?.roles) return gradeInput;
+
+    const nouveauGradeObj = hierarchie.roles.find(
+        r => r.nom.toLowerCase() === gradeInput.trim().toLowerCase()
+    );
+
+    if (nouveauGradeObj) {
+        const idsHierarchie = hierarchie.roles.map(r => r.id);
+        const rolesARetirer = targetMember.roles.cache.filter(r => idsHierarchie.includes(r.id));
+        
+        if (rolesARetirer.size > 0) {
+            await targetMember.roles.remove(rolesARetirer).catch(err => 
+                console.error("Erreur lors du retrait des anciens rôles hiérarchiques :", err)
+            );
+        }
+
+        await targetMember.roles.add(nouveauGradeObj.id).catch(err => 
+            console.error("Erreur lors de l'ajout du nouveau rôle hiérarchique :", err)
+        );
+
+        return `<@&${nouveauGradeObj.id}>`;
+    }
+
+    return gradeInput;
+}
+
+module.exports = async (client, interaction, dependencies = {}) => {
+    const {
+        ROLES_WARN = {},
+        ROLE_MEG,
+        ROLE_CONVOCATION,
+        ROLE_MORT_RP,
+        ROLE_BLACKLIST,
+        hierarchie = { roles: [] },
+        envoyerAuGoogleSheet = async () => {},
+        envoyerBlacklistAuSheet = async () => {},
+        sendHeistToSheets = () => {},
+        updateHeistStats,
+        sheets,
+        SPREADSHEET_ID
+    } = dependencies;
+
     try {
-        // GESTION DES COMMANDES SLASH
-        if (interaction.isCommand() || interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
-            try {
-                const command = bot.commands?.get(interaction.commandName) || require(`../Commandes/${interaction.commandName}`);
-                if (command) await command.run(bot, interaction, interaction.options);
-            } catch (err) {
-                console.error(`Erreur lors de l'exécution de la commande ${interaction.commandName}:`, err);
-                if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ 
-                        content: "Une erreur est survenue lors de l'exécution de cette commande.", 
-                        flags: Discord.MessageFlags.Ephemeral 
-                    });
-                }
-            }
-            return;
-        }
+        const emetteurMention = interaction.user.toString();
+        const dateFormatted = new Date().toLocaleDateString("fr-FR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+        });
 
-        // GESTION DES BOUTONS
         if (interaction.isButton()) {
-            if (interaction.customId.startsWith("btn_braquage_")) {
-                const typeBraquage = interaction.customId.replace("btn_braquage_", "");
+            const { customId } = interaction;
 
-                let titreModal = "Déclaration de Braquage";
-                if (typeBraquage === "atm") titreModal = "Braquage d'ATM";
-                else if (typeBraquage === "conteneur") titreModal = "Braquage de Conteneur";
-                else if (typeBraquage === "superette") titreModal = "Braquage de Supérette";
-                else if (typeBraquage === "fleeca") titreModal = "Braquage de Fleeca";
-                else if (typeBraquage === "bijouterie") titreModal = "Braquage de Bijouterie";
-                else if (typeBraquage === "banque_centrale") titreModal = "Braquage de Banque Centrale";
 
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId(`modal_braquage_${typeBraquage}`)
-                    .setTitle(titreModal);
+            if (customId.startsWith("btn_warn_") || customId.startsWith("btn_braquage_") || [
+                "btn_meg", "btn_convocation", "btn_sanction", 
+                "btn_mort_rp", "btn_blacklist", "btn_promotion", 
+                "btn_retrogradation", "btn_prime", "btn_patrouille", "btn_ronde"
+            ].includes(customId)) {
 
-                const inputBraqueurs = new Discord.TextInputBuilder()
-                    .setCustomId("input_braqueurs")
-                    .setLabel("Braqueurs (mentions, pseudos ou IDs)")
-                    .setPlaceholder("Ex: @Membre1, @Membre2")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+                let modalId = "";
+                let modalTitle = "";
+                let fields = [];
 
-                const inputOtages = new Discord.TextInputBuilder()
-                    .setCustomId("input_otages")
-                    .setLabel("Nombre d'otages")
-                    .setPlaceholder("Ex: 3 (ou 0)")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
+                if (customId.startsWith("btn_warn_")) {
+                    const level = customId.replace("btn_warn_", "");
+                    modalId = `modal_avertissement_${level}`;
+                    modalTitle = `Avertissement - Niveau ${level}`;
+                    fields = [
+                        { id: "input_membre", label: "Membre ciblé (Mention, ID ou Nom)" },
+                        { id: "input_motif", label: "Motif de l'avertissement", style: TextInputStyle.Paragraph }
+                    ];
+                } 
+                else if (customId === "btn_meg") {
+                    modalId = "modal_mise_en_garde";
+                    modalTitle = "Mise en Garde";
+                    fields = [
+                        { id: "input_membre", label: "Membre ciblé (Mention, ID ou Nom)" },
+                        { id: "input_motif", label: "Raison / Rappel à l'ordre", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId === "btn_convocation") {
+                    modalId = "modal_convocation";
+                    modalTitle = "Convocation Officielle";
+                    fields = [
+                        { id: "input_membre", label: "Membre convoqué" },
+                        { id: "input_heure", label: "Heure du rendez-vous" },
+                        { id: "input_lieu", label: "Lieu de rendez-vous" },
+                        { id: "input_motif", label: "Motif de la convocation", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId === "btn_sanction") {
+                    modalId = "modal_sanction";
+                    modalTitle = "Sanction Disciplinaire";
+                    fields = [
+                        { id: "input_membre", label: "Membre ciblé" },
+                        { id: "input_duree", label: "Durée de la sanction" },
+                        { id: "input_motif", label: "Motif de la sanction", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId === "btn_mort_rp") {
+                    modalId = "modal_mort_rp";
+                    modalTitle = "Exécution Officielle (Mort RP)";
+                    fields = [
+                        { id: "input_membre", label: "Membre exécuté" },
+                        { id: "input_date_heure", label: "Date et heure du décès", value: `${dateFormatted} à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` },
+                        { id: "input_motif", label: "Motif de l'exécution", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId === "btn_blacklist") {
+                    modalId = "modal_blacklist";
+                    modalTitle = "Inscription Blacklist";
+                    fields = [
+                        { id: "input_membre", label: "Personne ciblée" },
+                        { id: "input_duree", label: "Durée (Permanente / Durée précise)" },
+                        { id: "input_motif", label: "Motif du blacklist", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId === "btn_promotion") {
+                    modalId = "modal_promotion";
+                    modalTitle = "Promotion d'un Membre";
+                    fields = [
+                        { id: "input_membre", label: "Membre promu" },
+                        { id: "input_grade", label: "Nouveau Grade attribué" },
+                        { id: "input_motif", label: "Motif de la promotion", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId === "btn_retrogradation") {
+                    modalId = "modal_retrogradation";
+                    modalTitle = "Rétrogradation d'un Membre";
+                    fields = [
+                        { id: "input_membre", label: "Membre rétrogradé" },
+                        { id: "input_grade", label: "Nouveau Grade (inférieur)" },
+                        { id: "input_motif", label: "Motif de la rétrogradation", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId === "btn_prime") {
+                    modalId = "modal_prime";
+                    modalTitle = "Attribution d'une Prime";
+                    fields = [
+                        { id: "input_membre", label: "Membre récompensé" },
+                        { id: "input_motif", label: "Raison de la récompense", style: TextInputStyle.Paragraph }
+                    ];
+                }
+                else if (customId.startsWith("btn_braquage_")) {
+                    const type = customId.replace("btn_braquage_", "");
+                    modalId = `modal_braquage_${type}`;
+                    modalTitle = `Rapport - Braquage ${type.toUpperCase()}`;
+                    fields = [
+                        { id: "input_braqueurs", label: "Braqueurs (séparés par une virgule)" },
+                        { id: "input_otages", label: "Nombre d'otages" },
+                        { id: "input_lieu", label: "Lieu de l'intervention" },
+                        { id: "input_autorisation", label: "Accordé par (Mention/Nom)" },
+                        { id: "input_gain_et_coffre", label: "Gain obtenu | Coffre (ex: 50000$ | Oui)" }
+                    ];
+                }
+                else if (customId === "btn_patrouille") {
+                    modalId = "modal_patrouille";
+                    modalTitle = "Prise de Patrouille";
+                    fields = [
+                        { id: "input_leader", label: "Plus haut gradé présent" },
+                        { id: "input_membres", label: "Membres présents", style: TextInputStyle.Paragraph },
+                        { id: "input_modele", label: "Modèle du véhicule" },
+                        { id: "input_plaque", label: "Immatriculation (Plaque)" }
+                    ];
+                }
+                else if (customId === "btn_ronde") {
+                    modalId = "modal_ronde";
+                    modalTitle = "Prise de Ronde";
+                    fields = [
+                        { id: "input_section", label: "Section(s) à surveiller" },
+                        { id: "input_membres", label: "Membres présents", style: TextInputStyle.Paragraph }
+                    ];
+                }
 
-                const inputLieu = new Discord.TextInputBuilder()
-                    .setCustomId("input_lieu")
-                    .setLabel("Lieu")
-                    .setPlaceholder("Ex: Supérette Vinewood")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputAutorisation = new Discord.TextInputBuilder()
-                    .setCustomId("input_autorisation")
-                    .setLabel("Autorisation donnée par")
-                    .setPlaceholder("Ex: @Leader")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputGain = new Discord.TextInputBuilder()
-                    .setCustomId("input_gain_et_coffre")
-                    .setLabel("Argent sale gagné & Transféré au coffre")
-                    .setPlaceholder("Ex: 150000$ | Oui")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputBraqueurs),
-                    new Discord.ActionRowBuilder().addComponents(inputOtages),
-                    new Discord.ActionRowBuilder().addComponents(inputLieu),
-                    new Discord.ActionRowBuilder().addComponents(inputAutorisation),
-                    new Discord.ActionRowBuilder().addComponents(inputGain)
-                );
-
-                return await interaction.showModal(modal);
+                return await interaction.showModal(createCustomModal(modalId, modalTitle, fields));
             }
-            else if (interaction.customId === "btn_absence") {
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId("modal_absence")
-                    .setTitle("Déclaration d'absence");
 
-                const inputDebut = new Discord.TextInputBuilder()
-                    .setCustomId("input_date_debut")
-                    .setLabel("Date de début")
-                    .setPlaceholder("Ex: 15/08/2026")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputFin = new Discord.TextInputBuilder()
-                    .setCustomId("input_date_fin")
-                    .setLabel("Date de fin")
-                    .setPlaceholder("Ex: 20/08/2026")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputMotif = new Discord.TextInputBuilder()
-                    .setCustomId("input_motif")
-                    .setLabel("Motif de l'absence")
-                    .setPlaceholder("Raison de ton absence...")
-                    .setStyle(Discord.TextInputStyle.Paragraph)
-                    .setRequired(true);
-
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputDebut),
-                    new Discord.ActionRowBuilder().addComponents(inputFin),
-                    new Discord.ActionRowBuilder().addComponents(inputMotif)
-                );
-
-                await interaction.showModal(modal);
-            } 
-            else if (interaction.customId === "action_depot" || interaction.customId === "action_retrait") {
-                const actionType = interaction.customId === "action_depot" ? "depot" : "retrait";
-
-                const selectMenu = new Discord.StringSelectMenuBuilder()
-                    .setCustomId(`select_coffre_${actionType}`)
-                    .setPlaceholder("Choisissez le coffre concerné...")
-                    .addOptions([
-                        { label: "Coffre application", description: "Accéder au coffre Application", value: "appli" },
-                        { label: "Coffre lead", description: "Accéder au coffre Lead", value: "lead" }
-                    ]);
-
-                const row = new Discord.ActionRowBuilder().addComponents(selectMenu);
-
-                await interaction.reply({
-                    content: "Veuillez sélectionner le coffre :",
-                    components: [row],
-                    flags: Discord.MessageFlags.Ephemeral
-                });
-            } 
-            else if (interaction.customId.startsWith("warn_lvl_")) {
-                const level = interaction.customId.replace("warn_lvl_", "");
-
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId(`modal_avertissement_${level}`)
-                    .setTitle(`Avertissement (Niveau ${level})`);
-
-                const inputMembre = new Discord.TextInputBuilder()
-                    .setCustomId("input_membre")
-                    .setLabel("Membre visé (mention, pseudo ou ID)")
-                    .setPlaceholder("Ex: @Nom, nonop ou ID Discord")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputMotif = new Discord.TextInputBuilder()
-                    .setCustomId("input_motif")
-                    .setLabel("Motif")
-                    .setPlaceholder("Indiquez le motif de l'avertissement...")
-                    .setStyle(Discord.TextInputStyle.Paragraph)
-                    .setRequired(true);
-
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputMembre),
-                    new Discord.ActionRowBuilder().addComponents(inputMotif)
-                );
-
-                await interaction.showModal(modal);
-            }
-            else if (interaction.customId === "btn_start_patrouille") {
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId("modal_patrouille")
-                    .setTitle("Prise de Patrouille");
-
-                const inputLeader = new Discord.TextInputBuilder()
-                    .setCustomId("input_leader")
-                    .setLabel("Plus haut gradé (mention/ID/pseudo)")
-                    .setPlaceholder("Ex: @Leader ou 123456789")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputMembres = new Discord.TextInputBuilder()
-                    .setCustomId("input_membres")
-                    .setLabel("Membres présents (mentions/pseudos)")
-                    .setPlaceholder("Ex: @Membre1, @Membre2")
-                    .setStyle(Discord.TextInputStyle.Paragraph)
-                    .setRequired(true);
-
-                const inputModele = new Discord.TextInputBuilder()
-                    .setCustomId("input_modele")
-                    .setLabel("Modèle du véhicule")
-                    .setPlaceholder("Ex: Sultan RS, Cognoscenti...")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputPlaque = new Discord.TextInputBuilder()
-                    .setCustomId("input_plaque")
-                    .setLabel("Plaque d'immatriculation")
-                    .setPlaceholder("Ex: OLY-889")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputLeader),
-                    new Discord.ActionRowBuilder().addComponents(inputMembres),
-                    new Discord.ActionRowBuilder().addComponents(inputModele),
-                    new Discord.ActionRowBuilder().addComponents(inputPlaque)
-                );
-
-                await interaction.showModal(modal);
-            }
-            else if (interaction.customId === "btn_end_patrouille") {
+            if (customId === "btn_end_patrouille") {
                 const timestampFin = Math.floor(Date.now() / 1000);
-                let contentOriginal = interaction.message.content;
+                let content = interaction.message.content;
 
-                let nouveauContenu = contentOriginal
-                    .replace(
-                        "**Date et heure de fin :** *En cours...*",
-                        `**Date et heure de fin :** <t:${timestampFin}:f> (<t:${timestampFin}:R>)`
-                    )
-                    .replace(
-                        "**Status :** 🟢 **Patrouille Active**",
-                        "**Status :** 🔴 **Patrouille Terminée**"
-                    );
+                content = content.replace("**Date et heure de fin :** *En cours...*", `**Date et heure de fin :** <t:${timestampFin}:f> (<t:${timestampFin}:R>)`);
+                content = content.replace("🟢 **Patrouille Active**", "🔴 **Patrouille Terminée**");
 
-                const btnTermine = new Discord.ButtonBuilder()
-                    .setCustomId("btn_patrouille_terminee")
-                    .setLabel("Patrouille Terminée")
-                    .setStyle(Discord.ButtonStyle.Secondary)
-                    .setDisabled(true);
-
-                const row = new Discord.ActionRowBuilder().addComponents(btnTermine);
-
-                await interaction.update({
-                    content: nouveauContenu,
-                    components: [row]
-                });
+                return await interaction.update({ content, components: [] });
             }
-            else if (interaction.customId === "btn_start_ronde") {
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId("modal_ronde")
-                    .setTitle("Prise de Ronde");
 
-                const inputSection = new Discord.TextInputBuilder()
-                    .setCustomId("input_section")
-                    .setLabel("Section(s) protégée(s) (1, 2, 3 ou 4)")
-                    .setPlaceholder("Ex: Section 1 et 2")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputMembres = new Discord.TextInputBuilder()
-                    .setCustomId("input_membres")
-                    .setLabel("Membres présents (mentions/pseudos)")
-                    .setPlaceholder("Ex: @Membre1, @Membre2")
-                    .setStyle(Discord.TextInputStyle.Paragraph)
-                    .setRequired(true);
-
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputSection),
-                    new Discord.ActionRowBuilder().addComponents(inputMembres)
-                );
-
-                await interaction.showModal(modal);
-            }
-            else if (interaction.customId === "btn_end_ronde") {
+            if (customId === "btn_end_ronde") {
                 const timestampFin = Math.floor(Date.now() / 1000);
-                let contentOriginal = interaction.message.content;
+                let content = interaction.message.content;
 
-                const nouveauContenu = contentOriginal
-                    .replace(
-                        "**Date et heure de fin :** *En cours...*",
-                        `**Date et heure de fin :** <t:${timestampFin}:f> (<t:${timestampFin}:R>)`
-                    )
-                    .replace(
-                        "**Status :** 🟢 **Ronde Active**",
-                        "**Status :** 🔴 **Ronde Terminée**"
-                    );
+                content = content.replace("**Date et heure de fin :** *En cours...*", `**Date et heure de fin :** <t:${timestampFin}:f> (<t:${timestampFin}:R>)`);
+                content = content.replace("🟢 **Ronde Active**", "🔴 **Ronde Terminée**");
 
-                const btnTermine = new Discord.ButtonBuilder()
-                    .setCustomId("btn_ronde_terminee")
-                    .setLabel("Ronde Terminée")
-                    .setStyle(Discord.ButtonStyle.Secondary)
-                    .setDisabled(true);
-
-                const row = new Discord.ActionRowBuilder().addComponents(btnTermine);
-
-                await interaction.update({
-                    content: nouveauContenu,
-                    components: [row]
-                });
+                return await interaction.update({ content, components: [] });
             }
-            return;
         }
 
-        // GESTION DES MENUS DE SÉLECTION
-        if (interaction.isStringSelectMenu()) {
-            if (interaction.customId.startsWith("select_coffre_")) {
-                const actionType = interaction.customId.replace("select_coffre_", "");
-                const coffreChoisi = interaction.values[0];
-
-                const modalTitle = actionType === "depot" ? "Dépôt dans le coffre" : "Retrait du coffre";
-
-                const modal = new Discord.ModalBuilder()
-                    .setCustomId(`modal_${actionType}_${coffreChoisi}`)
-                    .setTitle(modalTitle);
-
-                const inputObjet = new Discord.TextInputBuilder()
-                    .setCustomId("input_objet")
-                    .setLabel("Nom de l'objet (ou plusieurs séparés)")
-                    .setPlaceholder("Ex: Pistolet, Munitions")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                const inputQuantite = new Discord.TextInputBuilder()
-                    .setCustomId("input_quantite")
-                    .setLabel("Quantité (ex: 2, 50)")
-                    .setPlaceholder("Ex: 2, 50 ou 1, 100 si plusieurs")
-                    .setStyle(Discord.TextInputStyle.Short)
-                    .setRequired(true);
-
-                modal.addComponents(
-                    new Discord.ActionRowBuilder().addComponents(inputObjet),
-                    new Discord.ActionRowBuilder().addComponents(inputQuantite)
-                );
-
-                await interaction.showModal(modal);
-            }
-            return;
-        }
-
-        // GESTION DES MODALS (FORMULAIRES)
-        if (interaction.type === Discord.InteractionType.ModalSubmit) {
-            const emetteurMention = interaction.user.toString();
-            const now = new Date();
-            const dateFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-
+        if (interaction.isModalSubmit()) {
             await interaction.deferReply();
 
-            if (interaction.customId === "modal_absence") {
-                const dateDebut = interaction.fields.getTextInputValue("input_date_debut");
-                const dateFin = interaction.fields.getTextInputValue("input_date_fin");
-                const motif = interaction.fields.getTextInputValue("input_motif");
-
-                const nomDiscord = interaction.member?.displayName || interaction.user.username;
-                const texteAbsenceStr = `Du ${dateDebut} au ${dateFin}`;
-
-                envoyerAuGoogleSheet(nomDiscord, { texteAbsence: texteAbsenceStr })
-                    .catch(err => console.error("Erreur Google Sheet :", err));
-
-                const template = `${interaction.user}\nDate de début : ${dateDebut}\nDate de fin : ${dateFin}\nMotif : ${motif}`;
-                await interaction.editReply({ 
-                    content: template,
-                    allowedMentions: { parse: ["users", "roles", "everyone"] }
-                });
-            }
-
-            else if (interaction.customId.startsWith("modal_depot_") || interaction.customId.startsWith("modal_retrait_")) {
-                const isDepot = interaction.customId.startsWith("modal_depot_");
-                const keyCoffre = interaction.customId.replace(isDepot ? "modal_depot_" : "modal_retrait_", "");
-                const nomCoffre = keyCoffre === "appli" ? "Coffre application" : "Coffre lead";
-
-                const objetsRaw = interaction.fields.getTextInputValue("input_objet");
-                const quantitesRaw = interaction.fields.getTextInputValue("input_quantite");
-
-                const listeObjets = objetsRaw.split(",").map(item => item.trim());
-                const listeQuantites = quantitesRaw.split(",").map(item => item.trim());
-
-                if (!bot.inventaire) bot.inventaire = { appli: {}, lead: {} };
-                if (!bot.inventaire[keyCoffre]) bot.inventaire[keyCoffre] = {};
-
-                let texteObjets = "";
-                for (let i = 0; i < listeObjets.length; i++) {
-                    let nomObjet = listeObjets[i];
-                    if (!nomObjet) continue;
-
-                    let qteRaw = listeQuantites[i] || listeQuantites[0] || "1";
-                    let qteNum = parseInt(qteRaw) || 1;
-
-                    if (!bot.inventaire[keyCoffre][nomObjet]) {
-                        bot.inventaire[keyCoffre][nomObjet] = 0;
-                    }
-
-                    if (isDepot) {
-                        bot.inventaire[keyCoffre][nomObjet] += qteNum;
-                    } else {
-                        bot.inventaire[keyCoffre][nomObjet] -= qteNum;
-                        if (bot.inventaire[keyCoffre][nomObjet] <= 0) {
-                            delete bot.inventaire[keyCoffre][nomObjet];
-                        }
-                    }
-
-                    texteObjets += `- ${i + 1}. x${qteNum} ${nomObjet}\n`;
-                }
-
-                let intituleAction = isDepot ? "Déposé par" : "Retiré par";
-                let messageFinal = `**__${nomCoffre}__** (${isDepot ? "Dépôt" : "Retrait"})\n\n${texteObjets}\n${intituleAction} ${emetteurMention}`;
-
-                await interaction.editReply({ 
-                    content: messageFinal,
-                    allowedMentions: { parse: ["users", "roles", "everyone"] }
-                });
-            }
-
-            else if (interaction.customId.startsWith("modal_avertissement_")) {
+            if (interaction.customId.startsWith("modal_avertissement_")) {
                 const level = interaction.customId.replace("modal_avertissement_", "");
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
-                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
+                const nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
-                if (targetMember) {
-                    const roleId = ROLES_WARN[level];
-                    if (roleId) await targetMember.roles.add(roleId).catch(err => console.error("Erreur ajout rôle avertissement :", err));
+                if (targetMember && ROLES_WARN[level]) {
+                    await targetMember.roles.add(ROLES_WARN[level]).catch(err => console.error("Erreur ajout rôle warn :", err));
                 }
 
-                let intituleSanction = level === "1" ? "1er avertissement" : level === "2" ? "2ème avertissement" : "Dernier avertissement";
-                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: intituleSanction })
-                    .catch(err => console.error("Erreur Google Sheet :", err));
+                const intituleSanction = level === "1" ? "1er avertissement" : level === "2" ? "2ème avertissement" : "Dernier avertissement";
+                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: intituleSanction }).catch(err => console.error("Erreur Sheet Warn :", err));
 
                 const decisionTexte = [
                     `${level === "1" ? "☒" : "☐"} Premier avertissement`,
@@ -526,69 +291,67 @@ module.exports = async (bot, interaction) => {
 
                 const template = `# AVERTISSEMENT \n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAu sein de cette Famille, chaque décision est prise avec réflexion. Aujourd'hui, nous choisissons de vous laisser une occasion de prouver votre valeur.\n\nConsidérez cette décision comme une faveur, non comme une faiblesse.\n\nLe moindre nouvel écart entraînera des mesures plus severe.\n\n**Décision :**\n${decisionTexte}\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId === "modal_mise_en_garde") {
+
+            if (interaction.customId === "modal_mise_en_garde") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
-                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
+                const nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
                 if (targetMember && ROLE_MEG) {
                     await targetMember.roles.add(ROLE_MEG).catch(err => console.error("Erreur ajout rôle MEG :", err));
                 }
 
-                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Mise en garde" })
-                    .catch(err => console.error("Erreur Google Sheet :", err));
+                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Mise en garde" }).catch(err => console.error("Erreur Sheet MEG :", err));
 
                 const template = `# MISE EN GARDE \n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Raison / Rappel :**\n${motif}\n\nLa discipline est le pilier de notre Famille. Ceci est un pré-avertissement formel afin de vous rappeler les règles de The Olympius Syndicate.\n\nPrenez ce rappel au sérieux pour éviter tout avertissement officiel (warn) ou sanction plus lourde.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId === "modal_convocation") {
+            if (interaction.customId === "modal_convocation") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const heure = interaction.fields.getTextInputValue("input_heure");
                 const lieu = interaction.fields.getTextInputValue("input_lieu");
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
-                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
+                const nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
                 if (targetMember && ROLE_CONVOCATION) {
                     await targetMember.roles.add(ROLE_CONVOCATION).catch(err => console.error("Erreur ajout rôle convocation :", err));
                 }
 
-                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Convoqué" })
-                    .catch(err => console.error("Erreur Google Sheet :", err));
+                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Convoqué" }).catch(err => console.error("Erreur Sheet Convocation :", err));
 
                 const template = `# CONVOCATION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Convoqué par :** ${emetteurMention}\n\n**Date de la convocation :** ${dateFormatted}\n\n**Heure :** ${heure}\n\n**Lieu :** ${lieu}\n\n**Motif :**\n${motif}\n\nLa Direction de **The Olympius Syndicate** exige votre présence.\n\nVotre présence est obligatoire.\n\nToute absence injustifiée sera interprétée comme un manque de respect envers la Famille.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId === "modal_sanction") {
+            if (interaction.customId === "modal_sanction") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const duree = interaction.fields.getTextInputValue("input_duree");
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
-                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
+                const nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
-                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: `Sanction (${duree})` })
-                    .catch(err => console.error("Erreur Google Sheet :", err));
+                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: `Sanction (${duree})` }).catch(err => console.error("Erreur Sheet Sanction :", err));
 
                 const template = `# SANCTION DISCIPLINAIRE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\n**Durée de la sanction :**\n${duree}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nLa sanction prend effet immédiatement pour la durée indiquée ci-dessus.\n\nRespectez cette décision et montrez que vous méritez encore votre place parmi nous.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId === "modal_mort_rp") {
+            if (interaction.customId === "modal_mort_rp") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 let dateHeure = "";
                 try {
@@ -599,30 +362,29 @@ module.exports = async (bot, interaction) => {
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
-                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
+                const nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
                 if (targetMember && ROLE_MORT_RP) {
-                    await targetMember.roles.add(ROLE_MORT_RP).catch(err => console.error("Erreur ajout rôle mort RP :", err));
+                    await targetMember.roles.add(ROLE_MORT_RP).catch(err => console.error("Erreur ajout rôle Mort RP :", err));
                 }
 
-                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Mort RP" })
-                    .catch(err => console.error("Erreur Google Sheet :", err));
+                envoyerAuGoogleSheet(nomCible, { sanctionIntitule: "Mort RP" }).catch(err => console.error("Erreur Sheet Mort RP :", err));
 
                 const template = `# ÉXÉCUTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Exécuté par :** ${emetteurMention}\n\n**Date et Heure du décès :** ${dateHeure}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu son jugement.\n\nVos actes ont porté atteinte à la discipline et à l'honneur de notre Famille.\n\nQue la mort de notre membre serve d'exemple aux autres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId === "modal_blacklist") {
+            if (interaction.customId === "modal_blacklist") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const dureeInput = interaction.fields.getTextInputValue("input_duree").trim();
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
-                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
-                let lienDiscord = targetMember ? `https://discord.com/users/${targetMember.id}` : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
+                const nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                const lienDiscord = targetMember ? `https://discord.com/users/${targetMember.id}` : membreInput;
 
                 if (targetMember && ROLE_BLACKLIST) {
                     await targetMember.roles.add(ROLE_BLACKLIST).catch(err => console.error("Erreur ajout rôle blacklist :", err));
@@ -634,116 +396,73 @@ module.exports = async (bot, interaction) => {
                     date: dateFormatted,
                     lienDiscord: lienDiscord,
                     raison: motif
-                }).catch(err => console.error("Erreur Google Sheet Blacklist :", err));
+                }).catch(err => console.error("Erreur Sheet Blacklist :", err));
 
-                let dureeTexte = (dureeInput.toLowerCase() === "permanente" || dureeInput.toLowerCase() === "perm" || dureeInput.toLowerCase() === "indéterminée")
+                const isPerm = ["permanente", "perm", "indéterminée"].includes(dureeInput.toLowerCase());
+                const dureeTexte = isPerm 
                     ? "☒ Indéterminée / Permanente\n☐ Temporaire :"
                     : `☐ Permanente\n☒ Temporaire : ${dureeInput}`;
 
                 const template = `# BLACKLIST\n\n## MAFIA The Olympius Syndicate\n\n**Nom de la personne :** ${memberMention}\n\n**Inscription décidée par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\n**Durée :**\n${dureeTexte}\n\nPar décision de la Direction, vous êtes inscrit sur la **Blacklist officielle de The Olympius Syndicate**.\n\nCette mesure vous interdit toute réintégration ou toute collaboration avec notre Famille pendant la durée indiquée.\n\nLa confiance ne se réclame pas. Elle se mérite.\n\nVotre dossier restera archivé au sein de nos registres.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId === "modal_promotion") {
+            if (interaction.customId === "modal_promotion") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const gradeInput = interaction.fields.getTextInputValue("input_grade");
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
-                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
+                const nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
-                let gradeAffichage = gradeInput;
-
-                if (targetMember && gradeInput) {
-                    const nouveauGradeObj = hierarchie.roles.find(
-                        r => r.nom.toLowerCase() === gradeInput.trim().toLowerCase()
-                    );
-
-                    if (nouveauGradeObj) {
-                        gradeAffichage = `<@&${nouveauGradeObj.id}>`;
-
-                        const idsHierarchie = hierarchie.roles.map(r => r.id);
-
-                        const rolesARetirer = targetMember.roles.cache.filter(r => idsHierarchie.includes(r.id));
-                        if (rolesARetirer.size > 0) {
-                            await targetMember.roles.remove(rolesARetirer).catch(err => console.error("Erreur retrait anciens rôles hiérarchie :", err));
-                        }
-
-                        await targetMember.roles.add(nouveauGradeObj.id).catch(err => console.error("Erreur ajout nouveau rôle hiérarchie :", err));
-                    }
-                }
+                const gradeAffichage = await updateHierarchyRole(targetMember, gradeInput, hierarchie);
 
                 envoyerAuGoogleSheet(nomCible, { 
                     grade: gradeInput || "Recrue", 
                     sanctionIntitule: `Promotion : ${gradeInput || "Nouveau Grade"}` 
-                }).catch(err => console.error("Erreur Google Sheet :", err));
+                }).catch(err => console.error("Erreur Sheet Promotion :", err));
 
                 const template = `# PROMOTION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Nouveau Grade :** ${gradeAffichage}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu sa décision.\n\nVos actions ont fait honneur à notre Famille.\n\nVotre fidélité nous prouve aujourd'hui que vous êtes capable du meilleur.\n\nHonorez cette promotion et continuez à vous montrer digne de votre place parmi nous.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ 
-                    content: template, 
-                    allowedMentions: { parse: ["users", "roles", "everyone"] } 
-                });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId === "modal_retrogradation") {
+            if (interaction.customId === "modal_retrogradation") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const gradeInput = interaction.fields.getTextInputValue("input_grade");
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
-                let nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
+                const nomCible = targetMember ? (targetMember.displayName || targetMember.user.username) : membreInput;
 
-                let gradeAffichage = gradeInput;
-
-                if (targetMember && gradeInput) {
-                    const nouveauGradeObj = hierarchie.roles.find(
-                        r => r.nom.toLowerCase() === gradeInput.trim().toLowerCase()
-                    );
-
-                    if (nouveauGradeObj) {
-                        gradeAffichage = `<@&${nouveauGradeObj.id}>`;
-
-                        const idsHierarchie = hierarchie.roles.map(r => r.id);
-
-                        const rolesARetirer = targetMember.roles.cache.filter(r => idsHierarchie.includes(r.id));
-                        if (rolesARetirer.size > 0) {
-                            await targetMember.roles.remove(rolesARetirer).catch(err => console.error("Erreur retrait anciens rôles hiérarchie :", err));
-                        }
-
-                        await targetMember.roles.add(nouveauGradeObj.id).catch(err => console.error("Erreur ajout nouveau rôle hiérarchie :", err));
-                    }
-                }
+                const gradeAffichage = await updateHierarchyRole(targetMember, gradeInput, hierarchie);
 
                 envoyerAuGoogleSheet(nomCible, { 
                     grade: gradeInput || "Recrue", 
                     sanctionIntitule: `Rétrogradation : ${gradeInput || "Ancien Grade"}` 
-                }).catch(err => console.error("Erreur Google Sheet :", err));
+                }).catch(err => console.error("Erreur Sheet Rétrogradation :", err));
 
                 const template = `# RÉTROGRADATION\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Nouveau Grade :** ${gradeAffichage}\n\n**Émis par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nAprès délibération, la Direction de **The Olympius Syndicate** a rendu sa décision.\n\nVos récents agissements et vos erreurs ne correspondent plus aux exigences de votre rang.\n\nCette rétrogradation est un rappel à l'ordre formel. À vous de faire vos preuves à nouveau si vous souhaitez regagner la confiance de la Famille.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ 
-                    content: template, 
-                    allowedMentions: { parse: ["users", "roles", "everyone"] } 
-                });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId === "modal_prime") {
+            if (interaction.customId === "modal_prime") {
                 const membreInput = interaction.fields.getTextInputValue("input_membre");
                 const motif = interaction.fields.getTextInputValue("input_motif");
 
                 const targetMember = await getTargetMember(interaction.guild, membreInput);
-                let memberMention = targetMember ? targetMember.toString() : membreInput;
+                const memberMention = targetMember ? targetMember.toString() : membreInput;
 
                 const template = `# PRIME DE RÉCOMPENSE\n\n## MAFIA The Olympius Syndicate\n\n**Nom du membre :** ${memberMention}\n\n**Accordée par :** ${emetteurMention}\n\n**Date :** ${dateFormatted}\n\n**Motif :**\n${motif}\n\nLa Direction de **The Olympius Syndicate** tient à saluer vos récents efforts.\n\nVos services et votre loyauté envers la Famille méritent d'être récompensés à leur juste valeur.\n\nContinuez sur cette voie.\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+                return await interaction.editReply({ content: template, allowedMentions: { parse: ["users", "roles", "everyone"] } });
             }
 
-            else if (interaction.customId.startsWith("modal_braquage_")) {
+            if (interaction.customId.startsWith("modal_braquage_")) {
                 const typeBraquage = interaction.customId.replace("modal_braquage_", "");
 
                 const braqueursInput = interaction.fields.getTextInputValue("input_braqueurs");
@@ -768,8 +487,8 @@ module.exports = async (bot, interaction) => {
                 }
 
                 const listeBraqueursBrute = braqueursInput.split(/[,/]/).map(b => b.trim());
-                let braqueursFormates = [];
-                let braqueursMembres = [];
+                const braqueursFormates = [];
+                const braqueursMembres = [];
 
                 for (const item of listeBraqueursBrute) {
                     if (!item) continue;
@@ -783,7 +502,7 @@ module.exports = async (bot, interaction) => {
                 }
                 const texteBraqueurs = braqueursFormates.join(" / ");
 
-                if (typeof updateHeistStats === 'function' && typeof sheets !== 'undefined' && typeof SPREADSHEET_ID !== 'undefined') {
+                if (typeof updateHeistStats === 'function' && sheets && SPREADSHEET_ID) {
                     await updateHeistStats(sheets, SPREADSHEET_ID, braqueursMembres, typeBraquage);
                 }
 
@@ -792,17 +511,16 @@ module.exports = async (bot, interaction) => {
                 const autoMember = await getTargetMember(interaction.guild, autoInput);
                 const autoMention = autoMember ? autoMember.toString() : autoInput;
 
-                let intituleTarget = "";
-                switch (typeBraquage) {
-                    case "atm": intituleTarget = "d'ATM"; break;
-                    case "conteneur": intituleTarget = "de conteneur"; break;
-                    case "superette": intituleTarget = "de supérette"; break;
-                    case "fleeca": intituleTarget = "de Fleeca"; break;
-                    case "bijouterie": intituleTarget = "de Bijouterie"; break;
-                    case "pacific":
-                    case "banque_centrale": intituleTarget = "de Banque Centrale"; break;
-                    default: intituleTarget = "de braquage";
-                }
+                const intitules = {
+                    atm: "d'ATM",
+                    conteneur: "de conteneur",
+                    superette: "de supérette",
+                    fleeca: "de Fleeca",
+                    bijouterie: "de Bijouterie",
+                    pacific: "de Banque Centrale",
+                    banque_centrale: "de Banque Centrale"
+                };
+                const intituleTarget = intitules[typeBraquage] || "de braquage";
 
                 const messageFinal = `**__Braquage ${intituleTarget} :__**\n\n` +
                     `Braqueurs : ${texteBraqueurs}\n` +
@@ -812,13 +530,13 @@ module.exports = async (bot, interaction) => {
                     `Argent sale gagné : ${gain}\n` +
                     `Transféré au coffre : ${transfereCoffre}`;
 
-                await interaction.editReply({
+                return await interaction.editReply({
                     content: messageFinal,
                     allowedMentions: { parse: ["users", "roles"] }
                 });
             }
 
-            else if (interaction.customId === "modal_patrouille") {
+            if (interaction.customId === "modal_patrouille") {
                 const leaderInput = interaction.fields.getTextInputValue("input_leader");
                 const membresInput = interaction.fields.getTextInputValue("input_membres");
                 const modele = interaction.fields.getTextInputValue("input_modele");
@@ -831,21 +549,21 @@ module.exports = async (bot, interaction) => {
 
                 const template = `# PRISE DE PATROUILLE\n\n## MAFIA The Olympius Syndicate\n\n**Date et heure de début :** <t:${timestampDebut}:f> (<t:${timestampDebut}:R>)\n**Date et heure de fin :** *En cours...*\n\n**Plus haut gradé :** ${leaderMention}\n**Membres présents :**\n${membresInput}\n\n**Véhicule :** ${modele} *(Plaque : ${plaque})*\n\n**Status :** 🟢 **Patrouille Active**\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                const btnFin = new Discord.ButtonBuilder()
+                const btnFin = new ButtonBuilder()
                     .setCustomId("btn_end_patrouille")
                     .setLabel("Fin de patrouille")
-                    .setStyle(Discord.ButtonStyle.Danger);
+                    .setStyle(ButtonStyle.Danger);
 
-                const row = new Discord.ActionRowBuilder().addComponents(btnFin);
+                const row = new ActionRowBuilder().addComponents(btnFin);
 
-                await interaction.editReply({
+                return await interaction.editReply({
                     content: template,
                     components: [row],
                     allowedMentions: { parse: ["users", "roles"] }
                 });
             }
 
-            else if (interaction.customId === "modal_ronde") {
+            if (interaction.customId === "modal_ronde") {
                 const sectionInput = interaction.fields.getTextInputValue("input_section");
                 const membresInput = interaction.fields.getTextInputValue("input_membres");
 
@@ -853,20 +571,19 @@ module.exports = async (bot, interaction) => {
 
                 const template = `# PRISE DE RONDE\n\n## MAFIA The Olympius Syndicate\n\n**Date et heure de début :** <t:${timestampDebut}:f> (<t:${timestampDebut}:R>)\n**Date et heure de fin :** *En cours...*\n\n**Section(s) protégée(s) :** ${sectionInput}\n\n**Membres présents :**\n${membresInput}\n\n**Status :** 🟢 **Ronde Active**\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
-                const btnFinRonde = new Discord.ButtonBuilder()
+                const btnFinRonde = new ButtonBuilder()
                     .setCustomId("btn_end_ronde")
                     .setLabel("Fin de ronde")
-                    .setStyle(Discord.ButtonStyle.Danger);
+                    .setStyle(ButtonStyle.Danger);
 
-                const row = new Discord.ActionRowBuilder().addComponents(btnFinRonde);
+                const row = new ActionRowBuilder().addComponents(btnFinRonde);
 
-                await interaction.editReply({
+                return await interaction.editReply({
                     content: template,
                     components: [row],
                     allowedMentions: { parse: ["users", "roles"] }
                 });
             }
-            return;
         }
 
     } catch (error) {
@@ -874,7 +591,7 @@ module.exports = async (bot, interaction) => {
 
         const errorPayload = { 
             content: "❌ Une erreur est survenue lors de l'exécution de cette action.", 
-            flags: Discord.MessageFlags.Ephemeral 
+            flags: MessageFlags.Ephemeral 
         };
 
         if (interaction.replied || interaction.deferred) {
