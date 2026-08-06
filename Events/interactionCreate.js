@@ -418,26 +418,25 @@ module.exports = async (bot, interaction) => {
 
             if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL !== "TON_URL_WEB_APP_GOOGLE_APPS_SCRIPT") {
                 try {
-                    const response = await fetch(GOOGLE_SCRIPT_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            action: "heist",
-                            heistType: rawHeistType,
-                            braqueurs: braqueursList
-                        })
-                    });
-
-                    const resData = await response.json();
-                    if (resData.status === "success") {
-                        syncStatus = "✅ Braquage comptabilisé sur Google Sheets !";
-                    } else if (resData.status === "warning") {
-                        syncStatus = `⚠️ ${resData.message} (Vérifiez les noms dans l'onglet Récap Braquages)`;
-                    } else {
-                        syncStatus = `❌ Erreur Sheet : ${resData.message}`;
-                    }
+    const fetch = globalThis.fetch || require("node-fetch");
+    const response = await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            action: "heist",
+            heistType: rawHeistType,
+            braqueurs: braqueursList
+            })
+        });
+        
+            const resData = await response.json();
+            if (resData.status === "success") {
+                    syncStatus = "✅ Braquage comptabilisé sur Google Sheets !";
+            } else {
+                    syncStatus = `⚠️ ${resData.message || "Erreur de comptabilisation"}`;
+            }
                 } catch (err) {
-                    console.error("Erreur d'envoi à Apps Script :", err);
+                    console.error("Erreur WebApp Apps Script:", err);
                     syncStatus = "❌ Échec de la communication avec Google Sheets.";
                 }
             }
