@@ -77,12 +77,12 @@ async function updateHierarchyRole(targetMember, gradeInput, hierarchie) {
         
         if (rolesARetirer.size > 0) {
             await targetMember.roles.remove(rolesARetirer).catch(err => 
-                console.error("Erreur lors du retrait des anciens rôles hiérarchiques :", err)
+                console.error("Erreur retrait anciens rôles :", err)
             );
         }
 
         await targetMember.roles.add(nouveauGradeObj.id).catch(err => 
-            console.error("Erreur lors de l'ajout du nouveau rôle hiérarchique :", err)
+            console.error("Erreur ajout rôle hiérarchique :", err)
         );
 
         return `<@&${nouveauGradeObj.id}>`;
@@ -114,6 +114,19 @@ module.exports = async (client, interaction, dependencies = {}) => {
             month: "2-digit",
             year: "numeric"
         });
+
+        // ==========================================
+        // GESTION DES SLASH COMMANDS (/avertissement, /coffre, etc.)
+        // ==========================================
+        if (interaction.isChatInputCommand()) {
+            const command = client.commands?.get(interaction.commandName);
+            if (command) {
+                await command.execute(interaction, dependencies);
+            } else {
+                await interaction.reply({ content: "❌ Commande introuvable.", flags: MessageFlags.Ephemeral });
+            }
+            return;
+        }
 
         // ==========================================
         // GESTION DES BOUTONS
@@ -535,7 +548,7 @@ module.exports = async (client, interaction, dependencies = {}) => {
                 const texteBraqueurs = braqueursFormates.join(" / ");
 
                 if (typeof updateHeistStats === 'function' && sheets && SPREADSHEET_ID) {
-                    await updateHeistStats(sheets, SPREADSHEET_ID, braqueursMembres, typeBraquage);
+                    await updateHeistStats(sheets, SPREADSHEET_ID, braqueursMembres, typeBraquage).catch(e => console.error("Erreur Heist Stats :", e));
                 }
 
                 sendHeistToSheets(typeBraquage, braqueursFormates);
@@ -626,10 +639,12 @@ module.exports = async (client, interaction, dependencies = {}) => {
             flags: MessageFlags.Ephemeral 
         };
 
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp(errorPayload).catch(() => {});
-        } else {
-            await interaction.reply(errorPayload).catch(() => {});
-        }
+        try {
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorPayload);
+            } else {
+                await interaction.reply(errorPayload);
+            }
+        } catch {}
     }
 };
