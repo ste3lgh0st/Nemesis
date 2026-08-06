@@ -6,13 +6,13 @@ module.exports = {
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 
-    async run(bot, message) {
+    async run(bot, message, args) {
         const ROLE_MAFIEUX_ID = "1472563147834392718";
 
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
+            .setColor(bot.color || "#2f3136")
             .setTitle("Gestion des Coffres")
-            .setDescription(`Bonjour <@&${ROLE_MAFIEUX_ID}> \n Merci de bien préciser les objets déposés ou retirés des coffres dans ce salon. Merci de respecter cette procédure sous peine de sanctions`);
+            .setDescription(`Bonjour <@&${ROLE_MAFIEUX_ID}>\nMerci de bien préciser les objets déposés ou retirés des coffres dans ce salon. Merci de respecter cette procédure sous peine de sanctions.`);
 
         const row = new Discord.ActionRowBuilder()
             .addComponents(
@@ -26,6 +26,11 @@ module.exports = {
                     .setStyle(Discord.ButtonStyle.Danger)
             );
 
-        await message.reply({ embeds: [embed], components: [row] });
+        // Détection automatique : Slash Command (Interaction) ou Message classique
+        if (message.isChatInputCommand && message.isChatInputCommand()) {
+            await message.reply({ embeds: [embed], components: [row] });
+        } else {
+            await message.channel.send({ embeds: [embed], components: [row] });
+        }
     }
 };
