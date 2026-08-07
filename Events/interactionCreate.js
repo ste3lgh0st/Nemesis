@@ -2,9 +2,6 @@ const Discord = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
-// URL de la WebApp Google Apps Script
-const GOOGLE_SCRIPT_URL = "TON_URL_WEB_APP_GOOGLE_APPS_SCRIPT";
-
 // Identifiants des Rôles & Constantes
 const ROLE_MEG = "1508213003743531199";
 const ROLE_BLACKLIST = "1529047916126142555";
@@ -416,25 +413,25 @@ module.exports = async (bot, interaction) => {
 
             let syncStatus = "⚠️ Synchronisation Sheet ignorée (URL non configurée)";
 
-            if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL !== "TON_URL_WEB_APP_GOOGLE_APPS_SCRIPT") {
+            if (GOOGLE_SCRIPT_URL) {
                 try {
-    const fetch = globalThis.fetch || require("node-fetch");
-    const response = await fetch(GOOGLE_SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            action: "heist",
-            heistType: rawHeistType,
-            braqueurs: braqueursList
-            })
-        });
-        
-            const resData = await response.json();
-            if (resData.status === "success") {
-                    syncStatus = "✅ Braquage comptabilisé sur Google Sheets !";
-            } else {
-                    syncStatus = `⚠️ ${resData.message || "Erreur de comptabilisation"}`;
-            }
+                    const fetch = globalThis.fetch || require("node-fetch");
+                    const response = await fetch(GOOGLE_SCRIPT_URL, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            action: "heist",
+                            heistType: rawHeistType,
+                            braqueurs: braqueursList
+                        })
+                    });
+            
+                    const resData = await response.json();
+                    if (resData.status === "success") {
+                        syncStatus = "✅ Braquage comptabilisé sur Google Sheets !";
+                    } else {
+                        syncStatus = `⚠️ ${resData.message || "Erreur de comptabilisation"}`;
+                    }
                 } catch (err) {
                     console.error("Erreur WebApp Apps Script:", err);
                     syncStatus = "❌ Échec de la communication avec Google Sheets.";
