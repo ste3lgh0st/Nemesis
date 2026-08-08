@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "panel-braquage",
     description: "Affiche le panel de déclaration de braquage",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

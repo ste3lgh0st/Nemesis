@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "sanction",
     description: "Émet une sanction disciplinaire officielle",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

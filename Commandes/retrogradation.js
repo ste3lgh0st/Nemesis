@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "retrogradation",
     description: "Émet une rétrogradation officielle",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

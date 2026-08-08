@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "prime",
     description: "Publie un avis d'attribution de prime",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

@@ -15,6 +15,7 @@ const ROLE_MORT_RP = "1508389958006865931";
 module.exports = {
     name: "info-membre",
     description: "Consulter la fiche RP et les sanctions d'un membre",
+    category: "Information",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
     options: [

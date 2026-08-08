@@ -1,7 +1,7 @@
 const Discord = require("discord.js");
 
 module.exports = {
-    name: "setup-patrouille",
+    name: "panel-patrouille",
     description: "Affiche le panneau de prise de patrouille",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,

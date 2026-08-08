@@ -9,6 +9,7 @@ const ROLES_WARN = {
 module.exports = {
     name: "unwarn",
     description: "Retire un avertissement à un membre",
+    category: "Administration",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
     options: [

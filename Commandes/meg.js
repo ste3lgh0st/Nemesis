@@ -1,8 +1,9 @@
 const Discord = require("discord.js");
 
 module.exports = {
-    name: "mise-en-garde",
+    name: "meg",
     description: "Envoyer une mise en garde formelle",
+    category: "Gestion",
 
     async run(bot, interaction) {
         const modal = new Discord.ModalBuilder()

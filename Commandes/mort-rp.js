@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "mort-rp",
     description: "Publie un avis d'exécution officielle (Mort RP)",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "avertissement",
     description: "Émet un avertissement officiel à un membre",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

@@ -3,6 +3,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = re
 module.exports = {
   name: "panel-absence",
   description: "Affiche le bouton pour poser une absence",
+  category: "Gestion",
   permission: PermissionFlagsBits.ManageMessages,
   dm: false,
 

@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "blacklist",
     description: "Inscrit une personne sur la blacklist officielle",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

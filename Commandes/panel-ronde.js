@@ -1,7 +1,7 @@
 const Discord = require("discord.js");
 
 module.exports = {
-    name: "setup-ronde",
+    name: "panel-ronde",
     description: "Affiche le panneau de prise de ronde dans la Villa",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,

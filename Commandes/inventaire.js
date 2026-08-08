@@ -7,6 +7,7 @@ const inventairePath = path.join(__dirname, "../inventaire.json"); // Ajuste le 
 module.exports = {
     name: "inventaire",
     description: "Affiche le contenu actuel d'un coffre",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
     options: [

@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "automsg",
     description: "Active ou désactive le message automatique de 17h",
+    category: "Administration",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
     options: [

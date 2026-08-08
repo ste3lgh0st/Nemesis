@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "coffre",
     description: "Affiche le panneau de gestion des coffres",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

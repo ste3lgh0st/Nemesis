@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "convocation",
     description: "Émet une convocation officielle à un membre",
+    category: "Gestion",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
 

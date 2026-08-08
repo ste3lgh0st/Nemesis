@@ -5,6 +5,7 @@ const ROLE_MEG = "1508213003743531199";
 module.exports = {
     name: "unmeg",
     description: "Retire la Mise en Garde d'un membre",
+    category: "Administration",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
     options: [

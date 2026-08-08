@@ -5,6 +5,7 @@ const ROLE_BLACKLIST = "1529047916126142555";
 module.exports = {
     name: "unblacklist",
     description: "Retire un membre de la Blacklist officielle",
+    category: "Administration",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
     options: [

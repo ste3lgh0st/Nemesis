@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 module.exports = {
     name: "setstatut",
     description: "Changer le statut du bot (Présence / Activité)",
+    category: "Administration",
     permission: Discord.PermissionFlagsBits.Administrator,
     dm: false,
     options: [
