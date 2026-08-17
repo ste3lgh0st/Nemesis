@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 
-// Remplace par ton ID Discord
-const OWNER_ID = "TON_ID_DISCORD"; 
+const OWNER_ID = "1202502660469817394"; 
 
 module.exports = {
     category: "Administration",
