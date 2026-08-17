@@ -4,6 +4,7 @@ const http = require("http");
 const loadCommands = require("./Loaders/loadCommands.js");
 const loadEvents = require("./Loaders/loadEvents.js");
 const config = require("./config");
+const { DefaultExtractors } = require('@discord-player/extractor');
 
 const bot = new Client({
     intents: [
@@ -17,7 +18,9 @@ const bot = new Client({
 });
 
 const player = new Player(bot);
-player.extractors.loadDefault();
+
+player.extractors.loadMulti(DefaultExtractors);
+
 bot.player = player;
 
 bot.commands = new Collection();
