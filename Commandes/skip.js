@@ -2,10 +2,9 @@ const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { useQueue } = require('discord-player');
 
 module.exports = {
+    name: "skip",
+    description: "Passe à la musique suivante dans la file d'attente.",
     category: "Musique",
-    data: new SlashCommandBuilder()
-        .setName('skip')
-        .setDescription('Passe à la musique suivante'),
 
     async run(bot, interaction) {
         const queue = useQueue(interaction.guild.id);

@@ -42,9 +42,14 @@ http.createServer((req, res) => {
 });
 
 (async () => {
-    await player.extractors.loadMulti(DefaultExtractors);
-    loadCommands(bot);
-    loadEvents(bot);
+    try {
+        await player.extractors.loadMulti(DefaultExtractors);
+        await loadCommands(bot);
+        await loadEvents(bot);
 
-    bot.login(config.token);
+        await bot.login(config.token);
+        console.log("🟢 Connexion à Discord réussie !");
+    } catch (err) {
+        console.error("🔴 Erreur lors du lancement ou de la connexion :", err);
+    }
 })();

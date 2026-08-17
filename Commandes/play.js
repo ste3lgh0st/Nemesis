@@ -2,17 +2,11 @@ const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { useMainPlayer } = require('discord-player');
 
 module.exports = {
+    name: "play",
+    description: "Joue une musique dans un salon vocal",
     category: "Musique",
-    data: new SlashCommandBuilder()
-        .setName('play')
-        .setDescription('Joue une musique ou une playlist')
-        .addStringOption(option => 
-            option.setName('recherche')
-                .setDescription('Titre ou URL de la musique')
-                .setRequired(true)
-        ),
 
-    async run(bot, interaction) {
+        async run(bot, interaction) {
         const player = useMainPlayer();
         const channel = interaction.member.voice.channel;
 
