@@ -1,19 +1,27 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } = require("discord.js");
+const { ApplicationCommandOptionType, ChannelType, MessageFlags, PermissionsBitField } = require("discord.js");
 
 module.exports = {
+    name: "setlogs",
+    description: "Configure ou désactive le salon de logs principal",
     category: "Administration",
-    data: new SlashCommandBuilder()
-        .setName("setlogs")
-        .setDescription("Configure ou désactive le salon de logs principal")
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-        .addChannelOption(option =>
-            option.setName("salon")
-                .setDescription("Le salon où envoyer les logs (laisser vide pour désactiver)")
-                .addChannelTypes(ChannelType.GuildText)
-                .setRequired(false)
-        ),
+    options: [
+        {
+            name: "salon",
+            description: "Le salon où envoyer les logs (laisser vide pour désactiver)",
+            type: ApplicationCommandOptionType.Channel,
+            channelTypes: [ChannelType.GuildText],
+            required: false
+        }
+    ],
 
     async run(bot, interaction) {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({
+                content: "❌ Vous devez être Administrateur pour utiliser cette commande.",
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
         const channel = interaction.options.getChannel("salon");
 
         if (!bot.db) bot.db = new Map();
