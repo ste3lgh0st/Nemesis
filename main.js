@@ -11,7 +11,8 @@ const bot = new Client({
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildModeration
     ]
 });
 
@@ -42,4 +43,6 @@ http.createServer((req, res) => {
 
 loadCommands(bot);
 loadEvents(bot);
+require("./events/logs.js")(bot);
+
 bot.login(config.token);
