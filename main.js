@@ -18,9 +18,6 @@ const bot = new Client({
 });
 
 const player = new Player(bot);
-
-player.extractors.loadMulti(DefaultExtractors);
-
 bot.player = player;
 
 bot.commands = new Collection();
@@ -44,8 +41,10 @@ http.createServer((req, res) => {
     console.log(`Serveur HTTP en écoute sur le port ${PORT}`);
 });
 
-loadCommands(bot);
-loadEvents(bot);
-require("./events/logs.js")(bot);
+(async () => {
+    await player.extractors.loadMulti(DefaultExtractors);
+    loadCommands(bot);
+    loadEvents(bot);
 
-bot.login(config.token);
+    bot.login(config.token);
+})();
