@@ -22,7 +22,7 @@ module.exports = async (bot) => {
         try {
             const channel = await bot.channels.fetch(CHANNEL_ID);
             if (channel) {
-                const messageTexte = `Bonjour <@&1472563147834392718>,\n\nLe conseil aura lieu à **21h00.** \n\nToute personne **présente** au conseil devra rester disponible pour prendre son service à son issue.\nIl est **inutile** d'y assister si vous n'avez pas l'intention de rester en service par la suite.\nLes consignes de la soirée y seront transmises.\n\nFréquence radio actuelle : **10.01**`;
+                const messageTexte = `Bonjour <@&1472563147834392718>,\n\nLe conseil aura lieu à **21h00.** \n\nToute personne **présente** au conseil devra rester disponible pour prendre son service à son issue.\nIl est **inutile** d'y assister si vous n'avez pas l'intention de rester en service par la suite.\nLes consignes de la soirée y seront transmises.\n\nFréquence radio actuelle : **11.44**`;
 
                 await channel.send({ content: messageTexte });
             }

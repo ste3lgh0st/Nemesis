@@ -17,7 +17,11 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1
 // Fonctions utilitaires pour l'inventaire
 function getInventory() {
     if (!fs.existsSync(INVENTORY_FILE)) {
-        fs.writeFileSync(INVENTORY_FILE, JSON.stringify({ appli: 0, lead: 0 }, null, 4));
+        try {
+            fs.writeFileSync(INVENTORY_FILE, JSON.stringify({ appli: 0, lead: 0 }, null, 4));
+        } catch (e) {
+            console.error("Erreur création fichier inventaire :", e);
+        }
     }
     try {
         return JSON.parse(fs.readFileSync(INVENTORY_FILE, "utf-8"));
@@ -27,7 +31,11 @@ function getInventory() {
 }
 
 function saveInventory(data) {
-    fs.writeFileSync(INVENTORY_FILE, JSON.stringify(data, null, 4));
+    try {
+        fs.writeFileSync(INVENTORY_FILE, JSON.stringify(data, null, 4));
+    } catch (e) {
+        console.error("Erreur sauvegarde inventaire :", e);
+    }
 }
 
 module.exports = async (bot, interaction) => {
@@ -280,7 +288,7 @@ module.exports = async (bot, interaction) => {
             const membre = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# MISE EN GARDE FORMELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre visé :** ${membre}\n**Émis par :** ${interaction.user}\n\n**Motif / Rappel :**\n${motif}\n\nCeci constitue une mise en garde formelle. Tout manquement futur entraînera des sanctions disciplinaires severes.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# MISE EN GARDE FORMELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre visé :** ${membre}\n**Émis par :** ${interaction.user}\n\n**Motif / Rappel :**\n${motif}\n\nCeci constitue une mise en garde formelle. Tout manquement futur entraînera des sanctions disciplinaires sévères.\n\n**Cordialement,**\n<@&1508046852027842600>`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -312,7 +320,7 @@ module.exports = async (bot, interaction) => {
             const emetteur = interaction.fields.getTextInputValue("input_emetteur");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# PROMOTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre promu :** ${membre}\n**Nouveau Grade :** ${grade}\n**Émis par :** ${emetteur}\n\n**Motif :**\n${motif}\n\nLa Direction vous félicite pour vos d’efforts et votre loyauté.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# PROMOTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre promu :** ${membre}\n**Nouveau Grade :** ${grade}\n**Émis par :** ${emetteur}\n\n**Motif :**\n${motif}\n\nLa Direction vous félicite pour vos efforts et votre loyauté.\n\n**Cordialement,**\n<@&1508046852027842600>`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -350,8 +358,8 @@ module.exports = async (bot, interaction) => {
         // --- COFFRE (Dépôt / Retrait) ---
         if (interaction.customId === "modal_coffre_depot" || interaction.customId === "modal_coffre_retrait") {
             const isDepot = interaction.customId === "modal_coffre_depot";
-            const qteAppli = parseInt(interaction.fields.getTextInputValue("input_appli")) || 0;
-            const qteLead = parseInt(interaction.fields.getTextInputValue("input_lead")) || 0;
+            const qteAppli = Math.max(0, parseInt(interaction.fields.getTextInputValue("input_appli")) || 0);
+            const qteLead = Math.max(0, parseInt(interaction.fields.getTextInputValue("input_lead")) || 0);
 
             const inv = getInventory();
             if (isDepot) {
@@ -397,7 +405,7 @@ module.exports = async (bot, interaction) => {
             return await interaction.reply({ content: template });
         }
 
-        // --- BRAQUAGES (Connexion automatique à Google Apps Script) ---
+        // --- BRAQUAGES ---
         if (interaction.customId.startsWith("modal_braquage_")) {
             await interaction.deferReply();
 
@@ -408,14 +416,12 @@ module.exports = async (bot, interaction) => {
             const gains = interaction.fields.getTextInputValue("input_gains");
             const remarques = interaction.fields.getTextInputValue("input_remarques") || "Aucune remarque particulière.";
 
-            // Découpage de la liste des braqueurs
             const braqueursList = equipageInput.split(/[\/,]/).map(b => b.trim()).filter(Boolean);
 
             let syncStatus = "⚠️ Synchronisation Sheet ignorée (URL non configurée)";
 
             if (GOOGLE_SCRIPT_URL) {
                 try {
-                    const fetch = globalThis.fetch || require("node-fetch");
                     const response = await fetch(GOOGLE_SCRIPT_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -423,14 +429,20 @@ module.exports = async (bot, interaction) => {
                             action: "heist",
                             heistType: rawHeistType,
                             braqueurs: braqueursList
-                        })
+                        }),
+                        redirect: "follow"
                     });
             
-                    const resData = await response.json();
-                    if (resData.status === "success") {
-                        syncStatus = "✅ Braquage comptabilisé sur Google Sheets !";
-                    } else {
-                        syncStatus = `⚠️ ${resData.message || "Erreur de comptabilisation"}`;
+                    const textData = await response.text();
+                    try {
+                        const resData = JSON.parse(textData);
+                        if (resData.status === "success") {
+                            syncStatus = "✅ Braquage comptabilisé sur Google Sheets !";
+                        } else {
+                            syncStatus = `⚠️ ${resData.message || "Erreur de comptabilisation"}`;
+                        }
+                    } catch (e) {
+                        syncStatus = "⚠️ Données reçues du Script non valides.";
                     }
                 } catch (err) {
                     console.error("Erreur WebApp Apps Script:", err);
