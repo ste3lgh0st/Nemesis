@@ -27,7 +27,6 @@ module.exports = {
                     .setStyle(Discord.ButtonStyle.Danger)
             );
 
-        // Détection automatique : Slash Command (Interaction) ou Message classique
         if (message.isChatInputCommand && message.isChatInputCommand()) {
             await message.reply({ embeds: [embed], components: [row] });
         } else {

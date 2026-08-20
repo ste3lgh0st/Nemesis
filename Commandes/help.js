@@ -17,12 +17,14 @@ module.exports = {
     async run(bot, interaction) {
         const commandName = interaction.options.getString("commande");
 
-        // Si l'utilisateur demande une commande spécifique
         if (commandName) {
             const cmd = bot.commands.get(commandName.toLowerCase()) || bot.commands.find(c => c.data?.name === commandName.toLowerCase());
 
             if (!cmd) {
-                return interaction.reply({ content: "❌ Cette commande n'existe pas.", flags: Discord.MessageFlags.Ephemeral });
+                return interaction.reply({ 
+                    content: "❌ Cette commande n'existe pas.", 
+                    flags: Discord.MessageFlags.Ephemeral 
+                });
             }
 
             const name = cmd.name || cmd.data?.name;
@@ -41,7 +43,6 @@ module.exports = {
             return interaction.reply({ embeds: [embedDetail] });
         }
 
-        // Récupération et groupement de toutes les commandes par catégorie
         const categories = new Map();
 
         bot.commands.forEach((cmd) => {
@@ -57,35 +58,43 @@ module.exports = {
             categories.get(category).push({ name, description });
         });
 
-        // Embed d'accueil principal
         const mainEmbed = new Discord.EmbedBuilder()
             .setColor("#2b2d31")
             .setTitle("📖 Menu d'aide")
-            .setDescription("Séléctionne une catégorie dans le menu ci-dessous pour voir les commandes disponibles.")
+            .setDescription("Sélectionne une catégorie dans le menu ci-dessous pour voir les commandes disponibles.")
             .setFooter({ text: `Total : ${bot.commands.size} commandes`, iconURL: bot.user.displayAvatarURL() });
 
-        // Création du Select Menu
+        const options = [];
+        let count = 0;
+
+        for (const [categoryName] of categories) {
+            if (count >= 25) break;
+            options.push({
+                label: categoryName.slice(0, 100),
+                value: categoryName.slice(0, 100),
+                description: `Commandes liées à ${categoryName}`.slice(0, 100)
+            });
+            count++;
+        }
+
+        if (options.length === 0) {
+            return interaction.reply({ content: "❌ Aucune commande/catégorie disponible.", flags: Discord.MessageFlags.Ephemeral });
+        }
+
         const selectMenu = new Discord.StringSelectMenuBuilder()
             .setCustomId("help_menu")
-            .setPlaceholder("Choisis une catégorie...");
-
-        categories.forEach((_, categoryName) => {
-            selectMenu.addOptions({
-                label: categoryName,
-                value: categoryName,
-                description: `Commandes liées à ${categoryName}`
-            });
-        });
+            .setPlaceholder("Choisis une catégorie...")
+            .addOptions(options);
 
         const row = new Discord.ActionRowBuilder().addComponents(selectMenu);
 
-        const response = await interaction.reply({
+        await interaction.reply({
             embeds: [mainEmbed],
-            components: [row],
-            fetchReply: true
+            components: [row]
         });
 
-        // Collecteur pour la sélection du menu
+        const response = await interaction.fetchReply();
+
         const collector = response.createMessageComponentCollector({
             componentType: Discord.ComponentType.StringSelect,
             time: 60000
@@ -93,11 +102,18 @@ module.exports = {
 
         collector.on("collect", async (i) => {
             if (i.user.id !== interaction.user.id) {
-                return i.reply({ content: "❌ Tu ne peux pas utiliser ce menu.", flags: Discord.MessageFlags.Ephemeral });
+                return i.reply({ 
+                    content: "❌ Tu ne peux pas utiliser ce menu.", 
+                    flags: Discord.MessageFlags.Ephemeral 
+                });
             }
 
             const selectedCategory = i.values[0];
             const cmds = categories.get(selectedCategory);
+
+            if (!cmds) {
+                return i.reply({ content: "❌ Catégorie introuvable.", flags: Discord.MessageFlags.Ephemeral });
+            }
 
             const categoryEmbed = new Discord.EmbedBuilder()
                 .setColor("#2b2d31")
@@ -108,9 +124,10 @@ module.exports = {
             await i.update({ embeds: [categoryEmbed] });
         });
 
-        collector.on("end", () => {
-            row.components[0].setDisabled(true);
-            interaction.editReply({ components: [row] }).catch(() => {});
+        collector.on("end", async () => {
+            selectMenu.setDisabled(true);
+            const disabledRow = new Discord.ActionRowBuilder().addComponents(selectMenu);
+            await interaction.editReply({ components: [disabledRow] }).catch(() => {});
         });
     }
 };

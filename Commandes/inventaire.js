@@ -2,7 +2,7 @@ const Discord = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
-const inventairePath = path.join(__dirname, "../inventaire.json"); // Ajuste le chemin vers inventaire.json si besoin
+const inventairePath = path.join(__dirname, "../inventaire.json");
 
 module.exports = {
     name: "inventaire",
@@ -26,7 +26,6 @@ module.exports = {
     async run(bot, message, args) {
         let typeCoffre = args.getString("coffre");
 
-        // 📁 LECTURE DE L'INVENTAIRE DEPUIS LE FICHIER JSON
         let inventaire = { appli: {}, lead: {} };
         if (fs.existsSync(inventairePath)) {
             try {

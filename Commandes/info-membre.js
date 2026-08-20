@@ -38,12 +38,10 @@ module.exports = {
             });
         }
 
-        // 🔹 Grade Hiérarchie
         const idsHierarchie = hierarchie.roles.map(r => r.id);
         const roleHierarchie = member.roles.cache.find(r => idsHierarchie.includes(r.id));
         const gradeNom = roleHierarchie ? `<@&${roleHierarchie.id}>` : "Aucun grade attribué";
 
-        // 🔹 Avertissements
         const warnsActifs = [];
         for (const [roleId, label] of Object.entries(ROLES_WARN)) {
             if (member.roles.cache.has(roleId)) {
@@ -52,16 +50,14 @@ module.exports = {
         }
         const warnsTexte = warnsActifs.length > 0 ? warnsActifs.join(", ") : "Aucun";
 
-        // 🔹 Autres statuts
         const aMEG = member.roles.cache.has(ROLE_MEG) ? "Oui" : "Non";
         const aBlacklist = member.roles.cache.has(ROLE_BLACKLIST) ? "Oui" : "Non";
         const aConvocation = member.roles.cache.has(ROLE_CONVOCATION) ? "Oui" : "Non";
         const aMortRP = member.roles.cache.has(ROLE_MORT_RP) ? "Oui" : "Non";
 
-        // 🔹 Date d'arrivée
         const dateArrivee = member.joinedAt ? `<t:${Math.floor(member.joinedAt.getTime() / 1000)}:R>` : "Inconnue";
 
-        const template = `# FICHE MEMBRE\n\n## MAFIA The Olympius Syndicate\n\n**Membre :** ${member}\n**Pseudo Discord :** ${member.user.tag}\n**Rejoint le serveur :** ${dateArrivee}\n\n**Grade actuel :** ${gradeNom}\n\n**-- Statut des Sanctions --**\n**Avertissements (Warns) :** ${warnsTexte}\n**Mise en garde (MEG) :** ${aMEG}\n**Convocation en cours :** ${aConvocation}\n**Blacklisté :** ${aBlacklist}\n**Mort RP :** ${aMortRP}\n\n**Cordialement,**\n<@&1508046852027842600>`;
+        const template = `## FICHE MEMBRE\n **__MAFIA The Olympius Syndicate__**\n\n**Membre :** ${member}\n**Pseudo Discord :** ${member.user.tag}\n**Rejoint le serveur :** ${dateArrivee}\n\n**Grade actuel :** ${gradeNom}\n\n**-- Statut des Sanctions --**\n**Avertissements (Warns) :** ${warnsTexte}\n**Mise en garde (MEG) :** ${aMEG}\n**Convocation en cours :** ${aConvocation}\n**Blacklisté :** ${aBlacklist}\n**Mort RP :** ${aMortRP}\n\n**Cordialement,**\n<@&1508046852027842600>`;
 
         await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
     }

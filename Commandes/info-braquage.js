@@ -8,10 +8,9 @@ module.exports = {
     dm: false,
 
     async run(bot, message) {
-        // Embed récapitulatif des règles de braquage
         const embed = new Discord.EmbedBuilder()
             .setTitle("💰 RÈGLES ET INFORMATIONS BRAQUAGES")
-            .setColor("#FFD700") // Couleur Or/Jaune
+            .setColor("#FFD700")
             .setDescription(
                 "- **__Supérettes__**\n" +
                 "   - 1 à 4 braqueurs\n" +
@@ -41,14 +40,12 @@ module.exports = {
             .setFooter({ text: "MAFIA The Olympius Syndicate", iconURL: message.guild.iconURL() })
             .setTimestamp();
 
-        // Envoi du message avec la mention + l'embed
         await message.channel.send({
             content: "__Voici les infos pour les braquages__ <@&1472563147834392718>",
             embeds: [embed],
             allowedMentions: { parse: ["roles"] }
         });
 
-        // Confirmation éphémère si exécuté via Slash Command
         if (message.isChatInputCommand && message.isChatInputCommand()) {
             await message.reply({ content: "Panneau des braquages envoyé avec succès !", flags: Discord.MessageFlags.Ephemeral });
         }
