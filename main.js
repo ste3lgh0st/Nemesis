@@ -46,25 +46,26 @@ async function startBot() {
         console.log("--- DÉMARRAGE DU BOT ---");
         
         await player.extractors.loadMulti(DefaultExtractors);
-        console.log("Extracteurs chargés.");
-        
         await loadCommands(bot);
-        console.log("Commandes chargées.");
-        
         await loadEvents(bot);
-        console.log("Événements chargés.");
 
         const token = process.env.TOKEN || config.token;
-        if (!token) {
-            throw new Error("TOKEN manquant ! Vérifie l'onglet Environment sur Render.");
-        }
+        
+        console.log(`Longueur du token récupéré : ${token ? token.trim().length : 0} caractères`);
 
         console.log("Connexion à Discord en cours...");
-        await bot.login(token);
+        
+        const loginPromise = bot.login(token ? token.trim() : "");
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Délai dépassé (Timeout 15s) : Discord ne répond pas !")), 15000)
+        );
+
+        await Promise.race([loginPromise, timeoutPromise]);
         console.log("🟢 Connexion à Discord réussie !");
+
     } catch (err) {
-        console.error("🔴 ERREUR CRITIQUE AU LANCEMENT :", err);
-        process.exit(1);
+        console.error("🔴 ERREUR DE CONNEXION :", err.message);
+        console.error(err);
     }
 }
 
