@@ -14,8 +14,10 @@ const bot = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildModeration
-    ]
+    ],
+    ws: { properties: { os: 'linux' } }
 });
+
 
 const player = new Player(bot);
 bot.player = player;
