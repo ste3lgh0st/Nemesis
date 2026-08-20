@@ -41,6 +41,27 @@ process.on("uncaughtException", (err) => {
     console.error(" [Anti-Crash] Uncaught Exception:", err);
 });
 
+bot.once("ready", async () => {
+    console.log(`🟢 Connexion à Discord réussie ! Connecté en tant que ${bot.user.tag}`);
+
+    const token = process.env.TOKEN || config.token;
+    if (bot.commands.size > 0 && token) {
+        try {
+            const rest = new REST({ version: "10" }).setToken(token.trim());
+            const commandsData = bot.commands.map(cmd => cmd.slash ? cmd.slash.toJSON() : cmd);
+            
+            console.log("Enregistrement des commandes Slash auprès de Discord...");
+            await rest.put(
+                Routes.applicationCommands(bot.user.id),
+                { body: commandsData }
+            );
+            console.log("✅ Commandes Slash enregistrées avec succès !");
+        } catch (err) {
+            console.error("❌ Erreur enregistrement Slash Commands:", err);
+        }
+    }
+});
+
 async function startBot() {
     try {
         console.log("--- DÉMARRAGE DU BOT ---");
@@ -60,20 +81,9 @@ async function startBot() {
         }
 
         console.log("Connexion à Discord en cours...");
-        await bot.login(token.trim());
-        console.log("🟢 Connexion à Discord réussie !");
-
-        if (bot.commands.size > 0) {
-            const rest = new REST({ version: "10" }).setToken(token.trim());
-            const commandsData = bot.commands.map(cmd => cmd.slash ? cmd.slash.toJSON() : cmd);
-            
-            console.log("Enregistrement des commandes Slash auprès de Discord...");
-            await rest.put(
-                Routes.applicationCommands(bot.user.id),
-                { body: commandsData }
-            );
-            console.log("✅ Commandes Slash enregistrées avec succès !");
-        }
+        await bot.login(token.trim()).catch(err => {
+            console.error("🔴 ERREUR DE LOGIN DISCORD (TOKEN INVALIDE ?) :", err.message);
+        });
 
     } catch (err) {
         console.error("🔴 ERREUR CRITIQUE AU LANCEMENT :", err);
