@@ -47,7 +47,14 @@ http.createServer((req, res) => {
         await loadCommands(bot);
         await loadEvents(bot);
 
-        await bot.login(config.token);
+        const token = process.env.TOKEN || config.token;
+
+        if (!token) {
+            console.error("🔴 AUCUN TOKEN TROUVÉ ! Vérifie l'onglet Environment sur Render.");
+            return;
+        }
+
+        await bot.login(token);
         console.log("🟢 Connexion à Discord réussie !");
     } catch (err) {
         console.error("🔴 Erreur lors du lancement ou de la connexion :", err);
