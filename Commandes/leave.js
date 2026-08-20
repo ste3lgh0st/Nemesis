@@ -1,11 +1,15 @@
-const { MessageFlags } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 
-const OWNER_ID = "1202502660469817394"; 
+const OWNER_ID = "1202502660469817394";
 
 module.exports = {
     name: "leave",
     description: "Fait quitter le bot du serveur actuel (Réservé au créateur)",
     category: "Administration",
+    dm: false,
+    slash: new SlashCommandBuilder()
+        .setName("leave")
+        .setDescription("Fait quitter le bot du serveur actuel (Réservé au créateur)"),
 
     async run(bot, interaction) {
         if (interaction.user.id !== OWNER_ID) {

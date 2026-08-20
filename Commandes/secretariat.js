@@ -1,42 +1,44 @@
 const { 
-    ApplicationCommandOptionType, 
+    SlashCommandBuilder, 
     ModalBuilder, 
     TextInputBuilder, 
     TextInputStyle, 
-    ActionRowBuilder 
+    ActionRowBuilder,
+    MessageFlags
 } = require("discord.js");
 
 module.exports = {
     name: "secretariat",
     description: "Gérer les actions administratives (convocation, sanction, promotion, annulations...)",
     category: "Gestion",
-    options: [
-        {
-            name: "action",
-            description: "Choisissez l'action administrative à effectuer",
-            type: ApplicationCommandOptionType.String,
-            required: true,
-            choices: [
-                // --- Actions standard ---
-                { name: "📩 Convocation", value: "convocation" },
-                { name: "⚠️ Avertissement / Sanction", value: "sanction" },
-                { name: "⛔ Blacklist", value: "blacklist" },
-                { name: "📜 Mise en garde", value: "meg" },
-                { name: "📈 Promotion", value: "promotion" },
-                { name: "📉 Rétrogradation", value: "retrogradation" },
-                { name: "💰 Prime", value: "prime" },
-                { name: "💀 Mort RP", value: "mort_rp" },
-                // --- Actions inverses / Annulations ---
-                { name: "❌ Annulation Convocation", value: "unconvocation" },
-                { name: "🟢 Retrait Sanction / Unwarn", value: "unsanction" },
-                { name: "✅ Retrait Blacklist (Unblacklist)", value: "unblacklist" },
-                { name: "🗑️ Retrait MEG (Unmeg)", value: "unmeg" },
-                { name: "🔄 Annulation Promotion", value: "unpromotion" },
-                { name: "🔄 Annulation Rétrogradation", value: "unretrogradation" },
-                { name: "💸 Annulation / Retrait Prime", value: "unprime" }
-            ]
-        }
-    ],
+    dm: false,
+    slash: new SlashCommandBuilder()
+        .setName("secretariat")
+        .setDescription("Gérer les actions administratives (convocation, sanction, promotion, annulations...)")
+        .addStringOption(opt =>
+            opt.setName("action")
+               .setDescription("Choisissez l'action administrative à effectuer")
+               .setRequired(true)
+               .addChoices(
+                   // --- Actions standard ---
+                   { name: "📩 Convocation", value: "convocation" },
+                   { name: "⚠️ Avertissement / Sanction", value: "sanction" },
+                   { name: "⛔ Blacklist", value: "blacklist" },
+                   { name: "📜 Mise en garde", value: "meg" },
+                   { name: "📈 Promotion", value: "promotion" },
+                   { name: "📉 Rétrogradation", value: "retrogradation" },
+                   { name: "💰 Prime", value: "prime" },
+                   { name: "💀 Mort RP", value: "mort_rp" },
+                   // --- Actions inverses / Annulations ---
+                   { name: "❌ Annulation Convocation", value: "unconvocation" },
+                   { name: "🟢 Retrait Sanction / Unwarn", value: "unsanction" },
+                   { name: "✅ Retrait Blacklist (Unblacklist)", value: "unblacklist" },
+                   { name: "🗑️ Retrait MEG (Unmeg)", value: "unmeg" },
+                   { name: "🔄 Annulation Promotion", value: "unpromotion" },
+                   { name: "🔄 Annulation Rétrogradation", value: "unretrogradation" },
+                   { name: "💸 Annulation / Retrait Prime", value: "unprime" }
+               )
+        ),
 
     async run(bot, interaction) {
         const action = interaction.options.getString("action");
@@ -208,7 +210,7 @@ module.exports = {
             }
 
             default:
-                return interaction.reply({ content: "❌ Action non reconnue.", ephemeral: true });
+                return interaction.reply({ content: "❌ Action non reconnue.", flags: MessageFlags.Ephemeral });
         }
     }
 };

@@ -1,36 +1,40 @@
-const Discord = require("discord.js");
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, SlashCommandBuilder } = require("discord.js");
+
+const ROLE_MAFIEUX_ID = "1472563147834392718";
 
 module.exports = {
     name: "coffre",
     description: "Affiche le panneau de gestion des coffres",
     category: "Gestion",
-    permission: Discord.PermissionFlagsBits.Administrator,
+    permission: PermissionFlagsBits.Administrator,
     dm: false,
+    slash: new SlashCommandBuilder()
+        .setName("coffre")
+        .setDescription("Affiche le panneau de gestion des coffres")
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-    async run(bot, message, args) {
-        const ROLE_MAFIEUX_ID = "1472563147834392718";
-
-        const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color || "#2f3136")
+    async run(bot, interaction) {
+        const embed = new EmbedBuilder()
+            .setColor(bot.color || "#0309e2")
             .setTitle("Gestion des Coffres")
             .setDescription(`Bonjour <@&${ROLE_MAFIEUX_ID}>\nMerci de bien préciser les objets déposés ou retirés des coffres dans ce salon. Merci de respecter cette procédure sous peine de sanctions.`);
 
-        const row = new Discord.ActionRowBuilder()
+        const row = new ActionRowBuilder()
             .addComponents(
-                new Discord.ButtonBuilder()
+                new ButtonBuilder()
                     .setCustomId("action_depot")
                     .setLabel("Dépôt")
-                    .setStyle(Discord.ButtonStyle.Success),
-                new Discord.ButtonBuilder()
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
                     .setCustomId("action_retrait")
                     .setLabel("Retrait")
-                    .setStyle(Discord.ButtonStyle.Danger)
+                    .setStyle(ButtonStyle.Danger)
             );
 
-        if (message.isChatInputCommand && message.isChatInputCommand()) {
-            await message.reply({ embeds: [embed], components: [row] });
-        } else {
-            await message.channel.send({ embeds: [embed], components: [row] });
+        if (interaction.isRepliable && interaction.isRepliable()) {
+            await interaction.reply({ embeds: [embed], components: [row] });
+        } else if (interaction.channel) {
+            await interaction.channel.send({ embeds: [embed], components: [row] });
         }
     }
 };

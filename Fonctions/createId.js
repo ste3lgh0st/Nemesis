@@ -1,9 +1,15 @@
-module.exports = async prefix => {
+/**
+ * Génère un identifiant unique aléatoire de 10 caractères avec un préfixe optionnel.
+ * @param {string} [prefix=""]
+ * @returns {string}
+ */
+module.exports = (prefix = "") => {
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let id = "";
+    
+    for (let i = 0; i < 10; i++) {
+        id += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
 
-    let caracters = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"];
-    let ID = [];
-    for(let i = 0; i < 10; i ++) ID.push(caracters[Math.floor(Math.random() * caracters.length)])
-
-    return `${prefix} + ${ID.join("")}`;
- 
-}
+    return prefix ? `${prefix}${id}` : id;
+};

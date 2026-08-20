@@ -1,19 +1,23 @@
-const { EmbedBuilder } = require("discord.js");
+const { EmbedBuilder, Events } = require("discord.js");
 
 module.exports = (bot) => {
 
-    // Helper pour récupérer le salon de logs configuré pour ce serveur
+    // Helper pour récupérer le salon de logs configuré
     function getLogChannel(guild) {
         if (!guild || !bot.db) return null;
         const channelId = bot.db.get(`logs_${guild.id}`);
-        if (!channelId) return null; // Désactivé si aucun salon configuré
+        if (!channelId) return null;
         return guild.channels.cache.get(channelId) || null;
     }
 
+    // Helper pour envoyer le log en toute sécurité
     async function sendLog(guild, embed) {
         const channel = getLogChannel(guild);
         if (channel) {
-            await channel.send({ embeds: [embed] }).catch(() => {});
+            await channel.send({ 
+                embeds: [embed],
+                allowedMentions: { parse: [] } // Évite tout ping involontaire dans le salon de logs
+            }).catch(() => {});
         }
     }
 
@@ -22,8 +26,23 @@ module.exports = (bot) => {
     // =========================================================
 
     // Message Supprimé
-    bot.on("messageDelete", async (message) => {
+    bot.on(Events.MessageDelete, async (message) => {
+        if (message.partial) {
+            try {
+                await message.fetch();
+            } catch {
+                // Le message n'a pas pu être récupéré depuis l'API/cache
+            }
+        }
+
         if (!message.guild || message.author?.bot) return;
+
+        let content = message.content ? message.content.substring(0, 1024) : null;
+        if (!content && message.attachments.size > 0) {
+            content = `*📷 [Pièce jointe / Image] (${message.attachments.first()?.url})*`;
+        } else if (!content) {
+            content = "*Aucun contenu texte (embed ou composant)*";
+        }
 
         const embed = new EmbedBuilder()
             .setColor("#e74c3c")
@@ -31,7 +50,7 @@ module.exports = (bot) => {
             .addFields(
                 { name: "Auteur", value: `${message.author} (\`${message.author.id}\`)`, inline: true },
                 { name: "Salon", value: `${message.channel}`, inline: true },
-                { name: "Contenu", value: message.content ? message.content.substring(0, 1024) : "*Aucun contenu texte (image ou embed)*" }
+                { name: "Contenu", value: content }
             )
             .setTimestamp()
             .setFooter({ text: `ID Message : ${message.id}` });
@@ -40,9 +59,27 @@ module.exports = (bot) => {
     });
 
     // Message Modifié
-    bot.on("messageUpdate", async (oldMessage, newMessage) => {
+    bot.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
+        if (oldMessage.partial) {
+            try {
+                await oldMessage.fetch();
+            } catch {
+                return;
+            }
+        }
+        if (newMessage.partial) {
+            try {
+                await newMessage.fetch();
+            } catch {
+                return;
+            }
+        }
+
         if (!oldMessage.guild || oldMessage.author?.bot) return;
         if (oldMessage.content === newMessage.content) return;
+
+        const oldContent = oldMessage.content ? oldMessage.content.substring(0, 1024) : "*Inconnu / Aucun*";
+        const newContent = newMessage.content ? newMessage.content.substring(0, 1024) : "*Inconnu / Aucun*";
 
         const embed = new EmbedBuilder()
             .setColor("#f1c40f")
@@ -50,10 +87,11 @@ module.exports = (bot) => {
             .addFields(
                 { name: "Auteur", value: `${oldMessage.author} (\`${oldMessage.author.id}\`)`, inline: true },
                 { name: "Salon", value: `${oldMessage.channel}`, inline: true },
-                { name: "Ancien contenu", value: oldMessage.content ? oldMessage.content.substring(0, 1024) : "*Inconnu*" },
-                { name: "Nouveau contenu", value: newMessage.content ? newMessage.content.substring(0, 1024) : "*Inconnu*" }
+                { name: "Ancien contenu", value: oldContent },
+                { name: "Nouveau contenu", value: newContent }
             )
-            .setTimestamp();
+            .setTimestamp()
+            .setFooter({ text: `ID Message : ${newMessage.id}` });
 
         await sendLog(oldMessage.guild, embed);
     });
@@ -62,11 +100,12 @@ module.exports = (bot) => {
     // 2. MEMBRES ET RÔLES
     // =========================================================
 
-    bot.on("guildMemberAdd", async (member) => {
+    // Membre Rejoint
+    bot.on(Events.GuildMemberAdd, async (member) => {
         const embed = new EmbedBuilder()
             .setColor("#2ecc71")
             .setTitle("📥 Membre rejoint")
-            .setThumbnail(member.user.displayAvatarURL())
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
             .addFields(
                 { name: "Membre", value: `${member} (\`${member.id}\`)` },
                 { name: "Compte créé le", value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>` }
@@ -76,11 +115,12 @@ module.exports = (bot) => {
         await sendLog(member.guild, embed);
     });
 
-    bot.on("guildMemberRemove", async (member) => {
+    // Membre Quitté
+    bot.on(Events.GuildMemberRemove, async (member) => {
         const embed = new EmbedBuilder()
             .setColor("#95a5a6")
             .setTitle("📤 Membre quitté")
-            .setThumbnail(member.user.displayAvatarURL())
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
             .addFields(
                 { name: "Membre", value: `${member.user.tag} (\`${member.id}\`)` },
                 { name: "Rejoint le", value: member.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : "*Inconnu*" }
@@ -90,7 +130,9 @@ module.exports = (bot) => {
         await sendLog(member.guild, embed);
     });
 
-    bot.on("guildMemberUpdate", async (oldMember, newMember) => {
+    // Mise à jour Membre (Pseudo / Rôles)
+    bot.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+        // Changement de Pseudo
         if (oldMember.nickname !== newMember.nickname) {
             const embed = new EmbedBuilder()
                 .setColor("#3498db")
@@ -105,6 +147,7 @@ module.exports = (bot) => {
             await sendLog(newMember.guild, embed);
         }
 
+        // Ajout / Retrait de rôles
         const addedRoles = newMember.roles.cache.filter(role => !oldMember.roles.cache.has(role.id));
         const removedRoles = oldMember.roles.cache.filter(role => !newMember.roles.cache.has(role.id));
 
@@ -139,10 +182,13 @@ module.exports = (bot) => {
     // 3. VOCAL
     // =========================================================
 
-    bot.on("voiceStateUpdate", async (oldState, newState) => {
+    bot.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         const guild = newState.guild || oldState.guild;
         const member = newState.member || oldState.member;
 
+        if (!guild || !member) return;
+
+        // Connexion
         if (!oldState.channelId && newState.channelId) {
             const embed = new EmbedBuilder()
                 .setColor("#2ecc71")
@@ -156,6 +202,7 @@ module.exports = (bot) => {
             await sendLog(guild, embed);
         }
 
+        // Déconnexion
         if (oldState.channelId && !newState.channelId) {
             const embed = new EmbedBuilder()
                 .setColor("#e74c3c")
@@ -169,6 +216,7 @@ module.exports = (bot) => {
             await sendLog(guild, embed);
         }
 
+        // Déplacement
         if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
             const embed = new EmbedBuilder()
                 .setColor("#3498db")
@@ -188,7 +236,7 @@ module.exports = (bot) => {
     // 4. MODÉRATION
     // =========================================================
 
-    bot.on("guildBanAdd", async (ban) => {
+    bot.on(Events.GuildBanAdd, async (ban) => {
         const embed = new EmbedBuilder()
             .setColor("#8e44ad")
             .setTitle("🔨 Membre Banni")
@@ -201,7 +249,7 @@ module.exports = (bot) => {
         await sendLog(ban.guild, embed);
     });
 
-    bot.on("guildBanRemove", async (ban) => {
+    bot.on(Events.GuildBanRemove, async (ban) => {
         const embed = new EmbedBuilder()
             .setColor("#2ecc71")
             .setTitle("🔓 Membre Débanni")

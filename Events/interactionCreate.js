@@ -1,8 +1,17 @@
-const Discord = require("discord.js");
+const { 
+    Events, 
+    InteractionType, 
+    MessageFlags, 
+    ModalBuilder, 
+    TextInputBuilder, 
+    TextInputStyle, 
+    ActionRowBuilder 
+} = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
 // Identifiants des Rôles & Constantes
+const ROLE_STAFF = "<@&1508046852027842600>";
 const ROLE_MEG = "1508213003743531199";
 const ROLE_BLACKLIST = "1529047916126142555";
 const ROLES_WARN = {
@@ -36,14 +45,18 @@ function saveInventory(data) {
 }
 
 const handleInteraction = async (bot, interaction) => {
-    if (interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
+
+    // ==========================================
+    // 1. GESTION DES COMMANDES SLASH
+    // ==========================================
+    if (interaction.isChatInputCommand() || interaction.type === InteractionType.ApplicationCommand) {
         const command = bot.commands.get(interaction.commandName);
         if (command) {
             try {
                 await command.run(bot, interaction);
             } catch (err) {
                 console.error(`Erreur lors de l'exécution de ${interaction.commandName}:`, err);
-                const replyOptions = { content: "❌ Une erreur est survenue lors de l'exécution de la commande.", flags: Discord.MessageFlags.Ephemeral };
+                const replyOptions = { content: "❌ Une erreur est survenue lors de l'exécution de la commande.", flags: MessageFlags.Ephemeral };
                 if (interaction.replied || interaction.deferred) await interaction.followUp(replyOptions);
                 else await interaction.reply(replyOptions);
             }
@@ -52,34 +65,44 @@ const handleInteraction = async (bot, interaction) => {
     }
 
     // ==========================================
-    // 2. GESTION DES BOUTONS (Ouverture des Modals)
+    // 2. GESTION DES MENUS DÉROULANTS (Select Menus)
+    // ==========================================
+    if (interaction.isStringSelectMenu()) {
+        // Ignorer l'interaction ici si elle est gérée par un collector dans la commande (ex: panel.js)
+        if (interaction.customId === "select_panel_type") {
+            return;
+        }
+    }
+
+    // ==========================================
+    // 3. GESTION DES BOUTONS (Ouverture Modals)
     // ==========================================
     if (interaction.isButton()) {
 
         // --- Avertissements (Warns) ---
         if (interaction.customId.startsWith("warn_lvl_")) {
             const level = interaction.customId.replace("warn_lvl_", "");
-            const modal = new Discord.ModalBuilder()
+            const modal = new ModalBuilder()
                 .setCustomId(`modal_warn_${level}`)
                 .setTitle(`Avertissement - Niveau ${level}`);
 
-            const inputMembre = new Discord.TextInputBuilder()
+            const inputMembre = new TextInputBuilder()
                 .setCustomId("input_membre")
                 .setLabel("Membre visé (Mention ou ID)")
                 .setPlaceholder("Ex: @Nom ou ID")
-                .setStyle(Discord.TextInputStyle.Short)
+                .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
-            const inputMotif = new Discord.TextInputBuilder()
+            const inputMotif = new TextInputBuilder()
                 .setCustomId("input_motif")
                 .setLabel("Motif de l'avertissement")
                 .setPlaceholder("Indiquez la raison exacte")
-                .setStyle(Discord.TextInputStyle.Paragraph)
+                .setStyle(TextInputStyle.Paragraph)
                 .setRequired(true);
 
             modal.addComponents(
-                new Discord.ActionRowBuilder().addComponents(inputMembre),
-                new Discord.ActionRowBuilder().addComponents(inputMotif)
+                new ActionRowBuilder().addComponents(inputMembre),
+                new ActionRowBuilder().addComponents(inputMotif)
             );
             return await interaction.showModal(modal);
         }
@@ -87,62 +110,62 @@ const handleInteraction = async (bot, interaction) => {
         // --- Coffre (Dépôt / Retrait) ---
         if (interaction.customId === "action_depot" || interaction.customId === "action_retrait") {
             const isDepot = interaction.customId === "action_depot";
-            const modal = new Discord.ModalBuilder()
+            const modal = new ModalBuilder()
                 .setCustomId(isDepot ? "modal_coffre_depot" : "modal_coffre_retrait")
                 .setTitle(isDepot ? "Dépôt dans le Coffre" : "Retrait du Coffre");
 
-            const inputAppli = new Discord.TextInputBuilder()
+            const inputAppli = new TextInputBuilder()
                 .setCustomId("input_appli")
                 .setLabel("Quantité Appli")
                 .setPlaceholder("Ex: 50 (mettre 0 si aucun)")
-                .setStyle(Discord.TextInputStyle.Short)
+                .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
-            const inputLead = new Discord.TextInputBuilder()
+            const inputLead = new TextInputBuilder()
                 .setCustomId("input_lead")
                 .setLabel("Quantité Lead")
                 .setPlaceholder("Ex: 100 (mettre 0 si aucun)")
-                .setStyle(Discord.TextInputStyle.Short)
+                .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
             modal.addComponents(
-                new Discord.ActionRowBuilder().addComponents(inputAppli),
-                new Discord.ActionRowBuilder().addComponents(inputLead)
+                new ActionRowBuilder().addComponents(inputAppli),
+                new ActionRowBuilder().addComponents(inputLead)
             );
             return await interaction.showModal(modal);
         }
 
         // --- Absence ---
         if (interaction.customId === "btn_absence") {
-            const modal = new Discord.ModalBuilder()
+            const modal = new ModalBuilder()
                 .setCustomId("modal_absence")
                 .setTitle("Déclaration d'Absence");
 
-            const inputDebut = new Discord.TextInputBuilder()
+            const inputDebut = new TextInputBuilder()
                 .setCustomId("input_debut")
                 .setLabel("Date de début")
                 .setPlaceholder("Ex: 10/08/2026")
-                .setStyle(Discord.TextInputStyle.Short)
+                .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
-            const inputFin = new Discord.TextInputBuilder()
+            const inputFin = new TextInputBuilder()
                 .setCustomId("input_fin")
                 .setLabel("Date de fin (ou durée)")
                 .setPlaceholder("Ex: 15/08/2026")
-                .setStyle(Discord.TextInputStyle.Short)
+                .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
-            const inputMotif = new Discord.TextInputBuilder()
+            const inputMotif = new TextInputBuilder()
                 .setCustomId("input_motif")
                 .setLabel("Motif de l'absence")
                 .setPlaceholder("Raison de votre absence...")
-                .setStyle(Discord.TextInputStyle.Paragraph)
+                .setStyle(TextInputStyle.Paragraph)
                 .setRequired(true);
 
             modal.addComponents(
-                new Discord.ActionRowBuilder().addComponents(inputDebut),
-                new Discord.ActionRowBuilder().addComponents(inputFin),
-                new Discord.ActionRowBuilder().addComponents(inputMotif)
+                new ActionRowBuilder().addComponents(inputDebut),
+                new ActionRowBuilder().addComponents(inputFin),
+                new ActionRowBuilder().addComponents(inputMotif)
             );
             return await interaction.showModal(modal);
         }
@@ -152,44 +175,44 @@ const handleInteraction = async (bot, interaction) => {
             const rawType = interaction.customId.replace("btn_braquage_", "");
             const typeBraquage = rawType.replace(/_/g, " ").toUpperCase();
 
-            const modal = new Discord.ModalBuilder()
+            const modal = new ModalBuilder()
                 .setCustomId(`modal_braquage_${rawType}`)
                 .setTitle(`Déclaration : ${typeBraquage}`);
 
-            const inputEquipage = new Discord.TextInputBuilder()
+            const inputEquipage = new TextInputBuilder()
                 .setCustomId("input_equipage")
                 .setLabel("Membres présents")
                 .setPlaceholder("Ex: Nom1, Nom2, Nom3")
-                .setStyle(Discord.TextInputStyle.Paragraph)
+                .setStyle(TextInputStyle.Paragraph)
                 .setRequired(true);
 
-            const inputGains = new Discord.TextInputBuilder()
+            const inputGains = new TextInputBuilder()
                 .setCustomId("input_gains")
                 .setLabel("Butin / Gains obtenus")
                 .setPlaceholder("Ex: $50,000, 200x argent sale...")
-                .setStyle(Discord.TextInputStyle.Short)
+                .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
-            const inputRemarques = new Discord.TextInputBuilder()
+            const inputRemarques = new TextInputBuilder()
                 .setCustomId("input_remarques")
                 .setLabel("Remarques / Bilan")
                 .setPlaceholder("Pertes, arrestations, déroulement...")
-                .setStyle(Discord.TextInputStyle.Paragraph)
+                .setStyle(TextInputStyle.Paragraph)
                 .setRequired(false);
 
             modal.addComponents(
-                new Discord.ActionRowBuilder().addComponents(inputEquipage),
-                new Discord.ActionRowBuilder().addComponents(inputGains),
-                new Discord.ActionRowBuilder().addComponents(inputRemarques)
+                new ActionRowBuilder().addComponents(inputEquipage),
+                new ActionRowBuilder().addComponents(inputGains),
+                new ActionRowBuilder().addComponents(inputRemarques)
             );
             return await interaction.showModal(modal);
         }
     }
 
     // ==========================================
-    // 3. GESTION DE LA SOUMISSION DES MODALS
+    // 4. GESTION SOUMISSION DES MODALS
     // ==========================================
-    if (interaction.type === Discord.InteractionType.ModalSubmit) {
+    if (interaction.type === InteractionType.ModalSubmit) {
 
         // --- BLACKLIST ---
         if (interaction.customId === "modal_blacklist") {
@@ -198,7 +221,17 @@ const handleInteraction = async (bot, interaction) => {
             const duree = interaction.fields.getTextInputValue("input_duree");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# AVIS DE BLACKLIST\n\n## MAFIA The Olympius Syndicate\n\n**Membre visé :** ${membre}\n**Émis par :** ${emetteur}\n**Durée :** ${duree}\n\n**Motif :**\n${motif}\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# AVIS DE BLACKLIST\n\n## MAFIA The Olympius Syndicate\n\n**Membre visé :** ${membre}\n**Émis par :** ${emetteur}\n**Durée :** ${duree}\n\n**Motif :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
+            return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
+        }
+
+        // --- UNBLACKLIST ---
+        if (interaction.customId === "modal_unblacklist") {
+            const membre = interaction.fields.getTextInputValue("input_membre");
+            const emetteur = interaction.fields.getTextInputValue("input_emetteur");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const template = `# RETRAIT DE BLACKLIST (UNBLACKLIST)\n\n## MAFIA The Olympius Syndicate\n\n**Membre réintégré :** ${membre}\n**Décidé par :** ${emetteur}\n\n**Motif du retrait :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -210,7 +243,17 @@ const handleInteraction = async (bot, interaction) => {
             const lieu = interaction.fields.getTextInputValue("input_lieu");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# CONVOCATION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre convoqué :** ${membre}\n**Émis par :** ${emetteur}\n**Heure / Date :** ${heure}\n**Lieu :** ${lieu}\n\n**Motif :**\n${motif}\n\nVotre présence est obligatoire.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# CONVOCATION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre convoqué :** ${membre}\n**Émis par :** ${emetteur}\n**Heure / Date :** ${heure}\n**Lieu :** ${lieu}\n\n**Motif :**\n${motif}\n\nVotre présence est obligatoire.\n\n**Cordialement,**\n${ROLE_STAFF}`;
+            return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
+        }
+
+        // --- UNCONVOCATION ---
+        if (interaction.customId === "modal_unconvocation") {
+            const membre = interaction.fields.getTextInputValue("input_membre");
+            const emetteur = interaction.fields.getTextInputValue("input_emetteur");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const template = `# ANNULATION DE CONVOCATION\n\n## MAFIA The Olympius Syndicate\n\n**Membre concerné :** ${membre}\n**Annulé par :** ${emetteur}\n\n**Raison de l'annulation :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -219,7 +262,17 @@ const handleInteraction = async (bot, interaction) => {
             const membre = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# MISE EN GARDE FORMELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre visé :** ${membre}\n**Émis par :** ${interaction.user}\n\n**Motif / Rappel :**\n${motif}\n\nCeci constitue une mise en garde formelle. Tout manquement futur entraînera des sanctions disciplinaires sévères.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# MISE EN GARDE FORMELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre visé :** ${membre}\n**Émis par :** ${interaction.user}\n\n**Motif / Rappel :**\n${motif}\n\nCeci constitue une mise en garde formelle. Tout manquement futur entraînera des sanctions disciplinaires sévères.\n\n**Cordialement,**\n${ROLE_STAFF}`;
+            return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
+        }
+
+        // --- UNMEG ---
+        if (interaction.customId === "modal_unmeg") {
+            const membre = interaction.fields.getTextInputValue("input_membre");
+            const emetteur = interaction.fields.getTextInputValue("input_emetteur");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const template = `# RETRAIT DE MISE EN GARDE\n\n## MAFIA The Olympius Syndicate\n\n**Membre concerné :** ${membre}\n**Retiré par :** ${emetteur}\n\n**Motif du retrait :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -230,7 +283,7 @@ const handleInteraction = async (bot, interaction) => {
             const dateHeure = interaction.fields.getTextInputValue("input_date_heure");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# 💀 AVIS D'EXÉCUTION OFFICIELLE (MORT RP)\n\n## MAFIA The Olympius Syndicate\n\n**Membre décédé :** ${membre}\n**Exécuté par :** ${emetteur}\n**Date & Heure :** ${dateHeure}\n\n**Motif :**\n${motif}\n\nQue son âme repose en paix.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# 💀 AVIS D'EXÉCUTION OFFICIELLE (MORT RP)\n\n## MAFIA The Olympius Syndicate\n\n**Membre décédé :** ${membre}\n**Exécuté par :** ${emetteur}\n**Date & Heure :** ${dateHeure}\n\n**Motif :**\n${motif}\n\nQue son âme repose en paix.\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -240,7 +293,17 @@ const handleInteraction = async (bot, interaction) => {
             const emetteur = interaction.fields.getTextInputValue("input_emetteur");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# ATTRIBUTION DE PRIME\n\n## MAFIA The Olympius Syndicate\n\n**Bénéficiaire :** ${membre}\n**Émis par :** ${emetteur}\n\n**Motif :**\n${motif}\n\nFélicitations pour votre investissement au sein de la Famille.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# ATTRIBUTION DE PRIME\n\n## MAFIA The Olympius Syndicate\n\n**Bénéficiaire :** ${membre}\n**Émis par :** ${emetteur}\n\n**Motif :**\n${motif}\n\nFélicitations pour votre investissement au sein de la Famille.\n\n**Cordialement,**\n${ROLE_STAFF}`;
+            return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
+        }
+
+        // --- UNPRIME ---
+        if (interaction.customId === "modal_unprime") {
+            const membre = interaction.fields.getTextInputValue("input_membre");
+            const emetteur = interaction.fields.getTextInputValue("input_emetteur");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const template = `# ANNULATION / RETRAIT DE PRIME\n\n## MAFIA The Olympius Syndicate\n\n**Membre concerné :** ${membre}\n**Annulé par :** ${emetteur}\n\n**Motif du retrait :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -251,7 +314,17 @@ const handleInteraction = async (bot, interaction) => {
             const emetteur = interaction.fields.getTextInputValue("input_emetteur");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# PROMOTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre promu :** ${membre}\n**Nouveau Grade :** ${grade}\n**Émis par :** ${emetteur}\n\n**Motif :**\n${motif}\n\nLa Direction vous félicite pour vos efforts et votre loyauté.\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# PROMOTION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre promu :** ${membre}\n**Nouveau Grade :** ${grade}\n**Émis par :** ${emetteur}\n\n**Motif :**\n${motif}\n\nLa Direction vous félicite pour vos efforts et votre loyauté.\n\n**Cordialement,**\n${ROLE_STAFF}`;
+            return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
+        }
+
+        // --- UNPROMOTION ---
+        if (interaction.customId === "modal_unpromotion") {
+            const membre = interaction.fields.getTextInputValue("input_membre");
+            const emetteur = interaction.fields.getTextInputValue("input_emetteur");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const template = `# ANNULATION DE PROMOTION\n\n## MAFIA The Olympius Syndicate\n\n**Membre concerné :** ${membre}\n**Annulé par :** ${emetteur}\n\n**Motif de l'annulation :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -259,9 +332,20 @@ const handleInteraction = async (bot, interaction) => {
         if (interaction.customId === "modal_retrogradation") {
             const membre = interaction.fields.getTextInputValue("input_membre");
             const grade = interaction.fields.getTextInputValue("input_grade");
+            const emetteur = interaction.fields.getTextInputValue("input_emetteur");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# RÉTROGRADATION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre concerné :** ${membre}\n**Nouveau Grade :** ${grade}\n**Décision prise par :** ${interaction.user}\n\n**Motif :**\n${motif}\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# RÉTROGRADATION OFFICIELLE\n\n## MAFIA The Olympius Syndicate\n\n**Membre concerné :** ${membre}\n**Nouveau Grade :** ${grade}\n**Décision prise par :** ${emetteur}\n\n**Motif :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
+            return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
+        }
+
+        // --- UNRETROGRADATION ---
+        if (interaction.customId === "modal_unretrogradation") {
+            const membre = interaction.fields.getTextInputValue("input_membre");
+            const emetteur = interaction.fields.getTextInputValue("input_emetteur");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const template = `# ANNULATION DE RÉTROGRADATION\n\n## MAFIA The Olympius Syndicate\n\n**Membre concerné :** ${membre}\n**Annulé par :** ${emetteur}\n\n**Motif de l'annulation :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -269,10 +353,20 @@ const handleInteraction = async (bot, interaction) => {
         if (interaction.customId === "modal_sanction") {
             const membre = interaction.fields.getTextInputValue("input_membre");
             const emetteur = interaction.fields.getTextInputValue("input_emetteur");
-            const duree = interaction.fields.getTextInputValue("input_duree");
+            const contenu = interaction.fields.getTextInputValue("input_contenu");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# SANCTION DISCIPLINAIRE\n\n## MAFIA The Olympius Syndicate\n\n**Membre sanctionné :** ${membre}\n**Émis par :** ${emetteur}\n**Durée :** ${duree}\n\n**Motif :**\n${motif}\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# SANCTION DISCIPLINAIRE\n\n## MAFIA The Olympius Syndicate\n\n**Membre sanctionné :** ${membre}\n**Émis par :** ${emetteur}\n**Sanction :** ${contenu}\n\n**Motif :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
+            return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
+        }
+
+        // --- UNSANCTION ---
+        if (interaction.customId === "modal_unsanction") {
+            const membre = interaction.fields.getTextInputValue("input_membre");
+            const emetteur = interaction.fields.getTextInputValue("input_emetteur");
+            const motif = interaction.fields.getTextInputValue("input_motif");
+
+            const template = `# RETRAIT DE SANCTION / UNWARN\n\n## MAFIA The Olympius Syndicate\n\n**Membre concerné :** ${membre}\n**Retiré par :** ${emetteur}\n\n**Motif du retrait :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -282,7 +376,7 @@ const handleInteraction = async (bot, interaction) => {
             const membre = interaction.fields.getTextInputValue("input_membre");
             const motif = interaction.fields.getTextInputValue("input_motif");
 
-            const template = `# AVERTISSEMENT DISCIPLINAIRE (WARN ${level})\n\n## MAFIA The Olympius Syndicate\n\n**Membre sanctionné :** ${membre}\n**Émis par :** ${interaction.user}\n**Niveau :** Warn ${level}/3\n\n**Motif :**\n${motif}\n\n**Cordialement,**\n<@&1508046852027842600>`;
+            const template = `# AVERTISSEMENT DISCIPLINAIRE (WARN ${level})\n\n## MAFIA The Olympius Syndicate\n\n**Membre sanctionné :** ${membre}\n**Émis par :** ${interaction.user}\n**Niveau :** Warn ${level}/3\n\n**Motif :**\n${motif}\n\n**Cordialement,**\n${ROLE_STAFF}`;
             return await interaction.reply({ content: template, allowedMentions: { parse: ["users", "roles"] } });
         }
 
@@ -369,5 +463,5 @@ const handleInteraction = async (bot, interaction) => {
 };
 
 module.exports = handleInteraction;
-module.exports.name = Discord.Events.InteractionCreate;
+module.exports.name = Events.InteractionCreate;
 module.exports.run = handleInteraction;

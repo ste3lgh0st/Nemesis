@@ -1,20 +1,23 @@
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
+const { Client, GatewayIntentBits, Collection } = require("discord.js");
 const { Player } = require("discord-player");
+const { DefaultExtractors } = require("@discord-player/extractor");
 const http = require("http");
+
 const loadCommands = require("./Loaders/loadCommands.js");
 const loadEvents = require("./Loaders/loadEvents.js");
+const loadSlashCommands = require("./Loaders/loadSlashCommands.js");
 const config = require("./config");
-const { DefaultExtractors } = require('@discord-player/extractor');
 
-// Serveur HTTP Keep-Alive
+// Serveur HTTP Keep-Alive (Pour hébergeurs web comme Render, Replit, etc.)
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Bot Nemesis en ligne !");
 }).listen(PORT, () => {
-    console.log(`🟢 Serveur Web en écoute sur le port ${PORT}`);
+    console.log(`🟢 Serveur Web Keep-Alive en écoute sur le port ${PORT}`);
 });
 
+// Instance du Client Discord
 const bot = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -29,62 +32,50 @@ const bot = new Client({
 bot.commands = new Collection();
 bot.color = "#0309e2";
 bot.function = {
-    createId: require("./Fonctions/createId"),
+    createId: require("./Fonctions/createId")
 };
 
-// Anti-Crash
+// Anti-Crash System
 process.on("unhandledRejection", (reason) => {
-    console.error(" [Anti-Crash] Unhandled Rejection:", reason);
+    console.error("⚠️ [Anti-Crash] Unhandled Rejection:", reason);
 });
 process.on("uncaughtException", (err) => {
-    console.error(" [Anti-Crash] Uncaught Exception:", err);
-});
-
-// Événement d'allumage
-bot.once("ready", async () => {
-    console.log(`🟢 CONNECTÉ SUR DISCORD EN TANT QUE : ${bot.user.tag}`);
-
-    // Initialisation de discord-player une fois connecté
-    try {
-        const player = new Player(bot);
-        bot.player = player;
-        await player.extractors.loadMulti(DefaultExtractors);
-        console.log("Extracteurs audio chargés.");
-    } catch (e) {
-        console.error("⚠️ Erreur chargement extracteurs audio :", e.message);
-    }
-
-    // Enregistrement des commandes Slash
-    const token = process.env.TOKEN || config.token;
-    if (bot.commands.size > 0 && token) {
-        try {
-            const rest = new REST({ version: "10" }).setToken(token.trim());
-            const commandsData = bot.commands.map(cmd => cmd.slash ? cmd.slash.toJSON() : cmd);
-            await rest.put(Routes.applicationCommands(bot.user.id), { body: commandsData });
-            console.log("✅ Commandes Slash enregistrées !");
-        } catch (err) {
-            console.error("❌ Erreur enregistrement Slash :", err);
-        }
-    }
+    console.error("⚠️ [Anti-Crash] Uncaught Exception:", err);
 });
 
 async function startBot() {
     try {
         console.log("--- DÉMARRAGE DU BOT ---");
-        
+
+        // 1. Initialisation de discord-player
+        try {
+            const player = new Player(bot);
+            bot.player = player;
+            await player.extractors.loadMulti(DefaultExtractors);
+            console.log("🎵 Extracteurs audio chargés avec succès.");
+        } catch (e) {
+            console.error("⚠️ Erreur lors du chargement des extracteurs audio :", e.message);
+        }
+
+        // 2. Chargement des commandes et des événements
         await loadCommands(bot);
         await loadEvents(bot);
 
+        // 3. Récupération du Token
         const token = process.env.TOKEN || config.token;
         if (!token) {
-            throw new Error("TOKEN manquant dans les variables d'environnement.");
+            throw new Error("TOKEN manquant dans les variables d'environnement ou config.js");
         }
 
-        console.log("Tentative de connexion à Discord...");
+        // 4. Connexion à Discord
+        console.log("Connexion à l'API Discord...");
         await bot.login(token.trim());
 
+        // 5. Enregistrement des Slash Commands
+        await loadSlashCommands(bot);
+
     } catch (err) {
-        console.error("🔴 ERREUR AU LANCEMENT :", err);
+        console.error("🔴 ERREUR CRITIQUE AU LANCEMENT :", err);
     }
 }
 

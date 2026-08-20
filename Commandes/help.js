@@ -1,18 +1,18 @@
-const Discord = require("discord.js");
+const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ComponentType, ApplicationCommandOptionType, MessageFlags, SlashCommandBuilder } = require("discord.js");
 
 module.exports = {
     name: "help",
     description: "Affiche la liste des commandes disponibles",
     category: "Informations",
     dm: true,
-    options: [
-        {
-            type: Discord.ApplicationCommandOptionType.String,
-            name: "commande",
-            description: "Obtenir des infos sur une commande précise",
-            required: false
-        }
-    ],
+    slash: new SlashCommandBuilder()
+        .setName("help")
+        .setDescription("Affiche la liste des commandes disponibles")
+        .addStringOption(opt =>
+            opt.setName("commande")
+               .setDescription("Obtenir des infos sur une commande précise")
+               .setRequired(false)
+        ),
 
     async run(bot, interaction) {
         const commandName = interaction.options.getString("commande");
@@ -23,19 +23,19 @@ module.exports = {
             if (!cmd) {
                 return interaction.reply({ 
                     content: "❌ Cette commande n'existe pas.", 
-                    flags: Discord.MessageFlags.Ephemeral 
+                    flags: MessageFlags.Ephemeral 
                 });
             }
 
             const name = cmd.name || cmd.data?.name;
-            const description = cmd.description || cmd.data?.description;
+            const description = cmd.description || cmd.data?.description || "Pas de description";
             const category = cmd.category || "Aucune";
 
-            const embedDetail = new Discord.EmbedBuilder()
-                .setColor("#2b2d31")
+            const embedDetail = new EmbedBuilder()
+                .setColor(bot.color || "#0309e2")
                 .setTitle(`📌 Commande /${name}`)
                 .addFields(
-                    { name: "Description", value: description || "Pas de description" },
+                    { name: "Description", value: description },
                     { name: "Catégorie", value: category, inline: true }
                 )
                 .setFooter({ text: `Demandé par ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
@@ -58,45 +58,37 @@ module.exports = {
             categories.get(category).push({ name, description });
         });
 
-        const mainEmbed = new Discord.EmbedBuilder()
-            .setColor("#2b2d31")
+        const mainEmbed = new EmbedBuilder()
+            .setColor(bot.color || "#0309e2")
             .setTitle("📖 Menu d'aide")
             .setDescription("Sélectionne une catégorie dans le menu ci-dessous pour voir les commandes disponibles.")
             .setFooter({ text: `Total : ${bot.commands.size} commandes`, iconURL: bot.user.displayAvatarURL() });
 
-        const options = [];
-        let count = 0;
-
-        for (const [categoryName] of categories) {
-            if (count >= 25) break;
-            options.push({
-                label: categoryName.slice(0, 100),
-                value: categoryName.slice(0, 100),
-                description: `Commandes liées à ${categoryName}`.slice(0, 100)
-            });
-            count++;
-        }
+        const options = Array.from(categories.keys()).slice(0, 25).map(categoryName => ({
+            label: categoryName.slice(0, 100),
+            value: categoryName.slice(0, 100),
+            description: `Commandes liées à ${categoryName}`.slice(0, 100)
+        }));
 
         if (options.length === 0) {
-            return interaction.reply({ content: "❌ Aucune commande/catégorie disponible.", flags: Discord.MessageFlags.Ephemeral });
+            return interaction.reply({ content: "❌ Aucune commande/catégorie disponible.", flags: MessageFlags.Ephemeral });
         }
 
-        const selectMenu = new Discord.StringSelectMenuBuilder()
+        const selectMenu = new StringSelectMenuBuilder()
             .setCustomId("help_menu")
             .setPlaceholder("Choisis une catégorie...")
             .addOptions(options);
 
-        const row = new Discord.ActionRowBuilder().addComponents(selectMenu);
+        const row = new ActionRowBuilder().addComponents(selectMenu);
 
-        await interaction.reply({
+        const response = await interaction.reply({
             embeds: [mainEmbed],
-            components: [row]
+            components: [row],
+            fetchReply: true
         });
 
-        const response = await interaction.fetchReply();
-
         const collector = response.createMessageComponentCollector({
-            componentType: Discord.ComponentType.StringSelect,
+            componentType: ComponentType.StringSelect,
             time: 60000
         });
 
@@ -104,7 +96,7 @@ module.exports = {
             if (i.user.id !== interaction.user.id) {
                 return i.reply({ 
                     content: "❌ Tu ne peux pas utiliser ce menu.", 
-                    flags: Discord.MessageFlags.Ephemeral 
+                    flags: MessageFlags.Ephemeral 
                 });
             }
 
@@ -112,11 +104,11 @@ module.exports = {
             const cmds = categories.get(selectedCategory);
 
             if (!cmds) {
-                return i.reply({ content: "❌ Catégorie introuvable.", flags: Discord.MessageFlags.Ephemeral });
+                return i.reply({ content: "❌ Catégorie introuvable.", flags: MessageFlags.Ephemeral });
             }
 
-            const categoryEmbed = new Discord.EmbedBuilder()
-                .setColor("#2b2d31")
+            const categoryEmbed = new EmbedBuilder()
+                .setColor(bot.color || "#0309e2")
                 .setTitle(`📂 Catégorie : ${selectedCategory}`)
                 .setDescription(cmds.map(c => `• **/${c.name}** : ${c.description}`).join("\n"))
                 .setFooter({ text: `Demandé par ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
@@ -126,7 +118,7 @@ module.exports = {
 
         collector.on("end", async () => {
             selectMenu.setDisabled(true);
-            const disabledRow = new Discord.ActionRowBuilder().addComponents(selectMenu);
+            const disabledRow = new ActionRowBuilder().addComponents(selectMenu);
             await interaction.editReply({ components: [disabledRow] }).catch(() => {});
         });
     }

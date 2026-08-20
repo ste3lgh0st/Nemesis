@@ -1,16 +1,22 @@
-const Discord = require("discord.js");
+const { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder, MessageFlags } = require("discord.js");
+
+const ROLE_MAFIEUX_ID = "1472563147834392718";
 
 module.exports = {
     name: "info-braquage",
     description: "Affiche le panneau d'information sur les règles de braquage",
     category: "Information",
-    permission: Discord.PermissionFlagsBits.Administrator,
+    permission: PermissionFlagsBits.Administrator,
     dm: false,
+    slash: new SlashCommandBuilder()
+        .setName("info-braquage")
+        .setDescription("Affiche le panneau d'information sur les règles de braquage")
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-    async run(bot, message) {
-        const embed = new Discord.EmbedBuilder()
+    async run(bot, interaction) {
+        const embed = new EmbedBuilder()
             .setTitle("💰 RÈGLES ET INFORMATIONS BRAQUAGES")
-            .setColor("#FFD700")
+            .setColor(bot.color || "#0309e2")
             .setDescription(
                 "- **__Supérettes__**\n" +
                 "   - 1 à 4 braqueurs\n" +
@@ -37,17 +43,19 @@ module.exports = {
                 "   - 1 braquage/jour\n" +
                 "   - 5 otages minimum"
             )
-            .setFooter({ text: "MAFIA The Olympius Syndicate", iconURL: message.guild.iconURL() })
+            .setFooter({ text: "MAFIA The Olympius Syndicate", iconURL: interaction.guild?.iconURL() })
             .setTimestamp();
 
-        await message.channel.send({
-            content: "__Voici les infos pour les braquages__ <@&1472563147834392718>",
-            embeds: [embed],
-            allowedMentions: { parse: ["roles"] }
-        });
+        if (interaction.channel) {
+            await interaction.channel.send({
+                content: `__Voici les infos pour les braquages__ <@&${ROLE_MAFIEUX_ID}>`,
+                embeds: [embed],
+                allowedMentions: { roles: [ROLE_MAFIEUX_ID] }
+            });
+        }
 
-        if (message.isChatInputCommand && message.isChatInputCommand()) {
-            await message.reply({ content: "Panneau des braquages envoyé avec succès !", flags: Discord.MessageFlags.Ephemeral });
+        if (interaction.isRepliable && interaction.isRepliable()) {
+            await interaction.reply({ content: "Panneau des braquages envoyé avec succès !", flags: MessageFlags.Ephemeral });
         }
     }
 };

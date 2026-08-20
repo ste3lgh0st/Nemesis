@@ -1,4 +1,4 @@
-const { EmbedBuilder, PermissionFlagsBits, ApplicationCommandOptionType } = require("discord.js");
+const { EmbedBuilder, SlashCommandBuilder, MessageFlags } = require("discord.js");
 const { exec } = require("child_process");
 
 const OWNER_ID = "1202502660469817394"; 
@@ -8,26 +8,26 @@ module.exports = {
     description: "Effectue un git add, commit, push et redémarre le bot",
     category: "Owner",
     dm: false,
-    options: [
-        {
-            type: ApplicationCommandOptionType.String,
-            name: "message",
-            description: "Message de commit Git",
-            required: false
-        }
-    ],
+    slash: new SlashCommandBuilder()
+        .setName("push")
+        .setDescription("Effectue un git add, commit, push et redémarre le bot")
+        .addStringOption(opt =>
+            opt.setName("message")
+               .setDescription("Message de commit Git")
+               .setRequired(false)
+        ),
 
     async run(bot, interaction) {
         if (interaction.user.id !== OWNER_ID) {
             return interaction.reply({
                 content: "❌ Seul le propriétaire du bot peut utiliser cette commande.",
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
         const commitMessage = interaction.options.getString("message") || "Update auto via Discord";
 
-        await interaction.reply({ content: "🔄 Execution du Git Push en cours..." });
+        await interaction.reply({ content: "🔄 Exécution du Git Push en cours..." });
 
         const gitCommand = `git add . && git commit -m "${commitMessage.replace(/"/g, '\\"')}" && git push`;
 

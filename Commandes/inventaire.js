@@ -1,4 +1,4 @@
-const Discord = require("discord.js");
+const { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder, MessageFlags } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
@@ -8,23 +8,24 @@ module.exports = {
     name: "inventaire",
     description: "Affiche le contenu actuel d'un coffre",
     category: "Gestion",
-    permission: Discord.PermissionFlagsBits.Administrator,
+    permission: PermissionFlagsBits.Administrator,
     dm: false,
-    options: [
-        {
-            type: Discord.ApplicationCommandOptionType.String,
-            name: "coffre",
-            description: "Sélectionne le coffre à consulter",
-            required: true,
-            choices: [
-                { name: "Coffre application", value: "appli" },
-                { name: "Coffre lead", value: "lead" }
-            ]
-        }
-    ],
+    slash: new SlashCommandBuilder()
+        .setName("inventaire")
+        .setDescription("Affiche le contenu actuel d'un coffre")
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .addStringOption(opt =>
+            opt.setName("coffre")
+               .setDescription("Sélectionne le coffre à consulter")
+               .setRequired(true)
+               .addChoices(
+                   { name: "Coffre application", value: "appli" },
+                   { name: "Coffre lead", value: "lead" }
+               )
+        ),
 
-    async run(bot, message, args) {
-        let typeCoffre = args.getString("coffre");
+    async run(bot, interaction) {
+        const typeCoffre = interaction.options.getString("coffre");
 
         let inventaire = { appli: {}, lead: {} };
         if (fs.existsSync(inventairePath)) {
@@ -35,27 +36,24 @@ module.exports = {
             }
         }
 
-        let stocks = inventaire[typeCoffre] || {};
-        let nomCoffre = typeCoffre === "appli" ? "Coffre Application" : "Coffre Lead";
-
-        let listeObjets = Object.keys(stocks);
+        const stocks = inventaire[typeCoffre] || {};
+        const nomCoffre = typeCoffre === "appli" ? "Coffre Application" : "Coffre Lead";
+        const listeObjets = Object.entries(stocks);
 
         if (listeObjets.length === 0) {
-            return await message.reply({ content: `Le **${nomCoffre}** est actuellement vide.`, flags: Discord.MessageFlags.Ephemeral });
+            return await interaction.reply({ 
+                content: `Le **${nomCoffre}** est actuellement vide.`, 
+                flags: MessageFlags.Ephemeral 
+            });
         }
 
-        let texte = `**__Contenu du ${nomCoffre}__**\n\n`;
-        let index = 1;
-        for (let objet in stocks) {
-            texte += `- ${index}. x${stocks[objet]} ${objet}\n`;
-            index++;
-        }
+        const texte = listeObjets.map(([objet, quantite], index) => `- ${index + 1}. x${quantite} ${objet}`).join("\n");
 
-        const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color || "#2b2d31")
+        const embed = new EmbedBuilder()
+            .setColor(bot.color || "#0309e2")
             .setTitle(`Inventaire - ${nomCoffre}`)
-            .setDescription(texte);
+            .setDescription(`**__Contenu du ${nomCoffre}__**\n\n${texte}`);
 
-        await message.reply({ embeds: [embed] });
+        await interaction.reply({ embeds: [embed] });
     }
 };
