@@ -1,11 +1,22 @@
-const fs = require("fs")
+const fs = require("fs");
 
-module.exports = async bot => {
+module.exports = async (bot) => {
+    const files = fs.readdirSync("./Events").filter(f => f.endsWith(".js"));
 
-    fs.readdirSync("./Events").filter(f => f.endsWith(".js")).forEach(async file => {
+    for (const file of files) {
+        const event = require(`../Events/${file}`);
+        const eventName = event.name || file.replace(".js", "");
 
-        let event = require(`../Events/${file}`)
-        bot.on(file.split(".js").join(""), event.bind(null, bot))
-        console.log(`Événement ${file} chargée avec succès`)
-    })
-}
+        if (typeof event === "function") {
+            bot.on(eventName, event.bind(null, bot));
+        } else if (event && typeof event.run === "function") {
+            if (event.once) {
+                bot.once(eventName, (...args) => event.run(bot, ...args));
+            } else {
+                bot.on(eventName, (...args) => event.run(bot, ...args));
+            }
+        }
+
+        console.log(`Événement ${file} chargé avec succès`);
+    }
+};
