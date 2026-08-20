@@ -6,6 +6,7 @@ const loadEvents = require("./Loaders/loadEvents.js");
 const config = require("./config");
 const { DefaultExtractors } = require('@discord-player/extractor');
 
+// Serveur HTTP Keep-Alive
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "text/plain" });
@@ -25,15 +26,13 @@ const bot = new Client({
     ]
 });
 
-const player = new Player(bot);
-bot.player = player;
-
 bot.commands = new Collection();
 bot.color = "#0309e2";
 bot.function = {
     createId: require("./Fonctions/createId"),
 };
 
+// Anti-Crash
 process.on("unhandledRejection", (reason) => {
     console.error(" [Anti-Crash] Unhandled Rejection:", reason);
 });
@@ -41,23 +40,30 @@ process.on("uncaughtException", (err) => {
     console.error(" [Anti-Crash] Uncaught Exception:", err);
 });
 
+// Événement d'allumage
 bot.once("ready", async () => {
-    console.log(`🟢 Connexion à Discord réussie ! Connecté en tant que ${bot.user.tag}`);
+    console.log(`🟢 CONNECTÉ SUR DISCORD EN TANT QUE : ${bot.user.tag}`);
 
+    // Initialisation de discord-player une fois connecté
+    try {
+        const player = new Player(bot);
+        bot.player = player;
+        await player.extractors.loadMulti(DefaultExtractors);
+        console.log("Extracteurs audio chargés.");
+    } catch (e) {
+        console.error("⚠️ Erreur chargement extracteurs audio :", e.message);
+    }
+
+    // Enregistrement des commandes Slash
     const token = process.env.TOKEN || config.token;
     if (bot.commands.size > 0 && token) {
         try {
             const rest = new REST({ version: "10" }).setToken(token.trim());
             const commandsData = bot.commands.map(cmd => cmd.slash ? cmd.slash.toJSON() : cmd);
-            
-            console.log("Enregistrement des commandes Slash auprès de Discord...");
-            await rest.put(
-                Routes.applicationCommands(bot.user.id),
-                { body: commandsData }
-            );
-            console.log("✅ Commandes Slash enregistrées avec succès !");
+            await rest.put(Routes.applicationCommands(bot.user.id), { body: commandsData });
+            console.log("✅ Commandes Slash enregistrées !");
         } catch (err) {
-            console.error("❌ Erreur enregistrement Slash Commands:", err);
+            console.error("❌ Erreur enregistrement Slash :", err);
         }
     }
 });
@@ -66,27 +72,19 @@ async function startBot() {
     try {
         console.log("--- DÉMARRAGE DU BOT ---");
         
-        await player.extractors.loadMulti(DefaultExtractors);
-        console.log("Extracteurs chargés.");
-        
         await loadCommands(bot);
-        console.log("Commandes chargées.");
-        
         await loadEvents(bot);
-        console.log("Événements chargés.");
 
         const token = process.env.TOKEN || config.token;
         if (!token) {
-            throw new Error("TOKEN manquant ! Vérifie l'onglet Environment sur Render.");
+            throw new Error("TOKEN manquant dans les variables d'environnement.");
         }
 
-        console.log("Connexion à Discord en cours...");
-        await bot.login(token.trim()).catch(err => {
-            console.error("🔴 ERREUR DE LOGIN DISCORD (TOKEN INVALIDE ?) :", err.message);
-        });
+        console.log("Tentative de connexion à Discord...");
+        await bot.login(token.trim());
 
     } catch (err) {
-        console.error("🔴 ERREUR CRITIQUE AU LANCEMENT :", err);
+        console.error("🔴 ERREUR AU LANCEMENT :", err);
     }
 }
 
