@@ -2,6 +2,8 @@ const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { useQueue } = require('discord-player');
 
 module.exports = {
+    name: "resume",
+    description: "Reprendre la lecture de la musique",
     category: "Musique",
     data: new SlashCommandBuilder()
         .setName('resume')
