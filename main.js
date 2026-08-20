@@ -41,22 +41,31 @@ http.createServer((req, res) => {
     console.log(`Serveur HTTP en écoute sur le port ${PORT}`);
 });
 
-(async () => {
+async function startBot() {
     try {
+        console.log("--- DÉMARRAGE DU BOT ---");
+        
         await player.extractors.loadMulti(DefaultExtractors);
+        console.log("Extracteurs chargés.");
+        
         await loadCommands(bot);
+        console.log("Commandes chargées.");
+        
         await loadEvents(bot);
+        console.log("Événements chargés.");
 
         const token = process.env.TOKEN || config.token;
-
         if (!token) {
-            console.error("🔴 AUCUN TOKEN TROUVÉ ! Vérifie l'onglet Environment sur Render.");
-            return;
+            throw new Error("TOKEN manquant ! Vérifie l'onglet Environment sur Render.");
         }
 
+        console.log("Connexion à Discord en cours...");
         await bot.login(token);
         console.log("🟢 Connexion à Discord réussie !");
     } catch (err) {
-        console.error("🔴 Erreur lors du lancement ou de la connexion :", err);
+        console.error("🔴 ERREUR CRITIQUE AU LANCEMENT :", err);
+        process.exit(1);
     }
-})();
+}
+
+startBot();
