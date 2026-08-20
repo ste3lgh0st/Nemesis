@@ -16,16 +16,13 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxcY2k-IGuvz1
 
 // Fonctions utilitaires pour l'inventaire
 function getInventory() {
-    if (!fs.existsSync(INVENTORY_FILE)) {
-        try {
-            fs.writeFileSync(INVENTORY_FILE, JSON.stringify({ appli: 0, lead: 0 }, null, 4));
-        } catch (e) {
-            console.error("Erreur création fichier inventaire :", e);
-        }
-    }
     try {
+        if (!fs.existsSync(INVENTORY_FILE)) {
+            fs.writeFileSync(INVENTORY_FILE, JSON.stringify({ appli: 0, lead: 0 }, null, 4));
+        }
         return JSON.parse(fs.readFileSync(INVENTORY_FILE, "utf-8"));
     } catch (e) {
+        console.error("Erreur lecture/création inventaire :", e);
         return { appli: 0, lead: 0 };
     }
 }
@@ -38,12 +35,12 @@ function saveInventory(data) {
     }
 }
 
-module.exports = async (bot, interaction) => {
+const handleInteraction = async (bot, interaction) => {
 
     // ==========================================
     // 1. GESTION DES COMMANDES SLASH
     // ==========================================
-    if (interaction.type === Discord.InteractionType.ApplicationCommand) {
+    if (interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
         const command = bot.commands.get(interaction.commandName);
         if (command) {
             try {
@@ -188,68 +185,6 @@ module.exports = async (bot, interaction) => {
                 new Discord.ActionRowBuilder().addComponents(inputEquipage),
                 new Discord.ActionRowBuilder().addComponents(inputGains),
                 new Discord.ActionRowBuilder().addComponents(inputRemarques)
-            );
-            return await interaction.showModal(modal);
-        }
-
-        // --- Patrouille ---
-        if (interaction.customId === "btn_start_patrouille") {
-            const modal = new Discord.ModalBuilder()
-                .setCustomId("modal_patrouille")
-                .setTitle("Prise de Patrouille");
-
-            const inputEquipage = new Discord.TextInputBuilder()
-                .setCustomId("input_equipage")
-                .setLabel("Équipage (Membres)")
-                .setPlaceholder("Ex: @Nom1, @Nom2")
-                .setStyle(Discord.TextInputStyle.Short)
-                .setRequired(true);
-
-            const inputVehicule = new Discord.TextInputBuilder()
-                .setCustomId("input_vehicule")
-                .setLabel("Véhicule utilisé")
-                .setPlaceholder("Ex: Granger 3600LX - Immatriculation")
-                .setStyle(Discord.TextInputStyle.Short)
-                .setRequired(true);
-
-            const inputHeure = new Discord.TextInputBuilder()
-                .setCustomId("input_heure")
-                .setLabel("Heure de début")
-                .setPlaceholder("Ex: 21h30")
-                .setStyle(Discord.TextInputStyle.Short)
-                .setRequired(true);
-
-            modal.addComponents(
-                new Discord.ActionRowBuilder().addComponents(inputEquipage),
-                new Discord.ActionRowBuilder().addComponents(inputVehicule),
-                new Discord.ActionRowBuilder().addComponents(inputHeure)
-            );
-            return await interaction.showModal(modal);
-        }
-
-        // --- Ronde ---
-        if (interaction.customId === "btn_start_ronde") {
-            const modal = new Discord.ModalBuilder()
-                .setCustomId("modal_ronde")
-                .setTitle("Prise de Ronde Villa");
-
-            const inputPresents = new Discord.TextInputBuilder()
-                .setCustomId("input_presents")
-                .setLabel("Membres présents")
-                .setPlaceholder("Ex: @Nom1, @Nom2")
-                .setStyle(Discord.TextInputStyle.Short)
-                .setRequired(true);
-
-            const inputZones = new Discord.TextInputBuilder()
-                .setCustomId("input_zones")
-                .setLabel("Sections / Zones contrôlées")
-                .setPlaceholder("Ex: Entrée principale, Héliport, Coffre")
-                .setStyle(Discord.TextInputStyle.Paragraph)
-                .setRequired(true);
-
-            modal.addComponents(
-                new Discord.ActionRowBuilder().addComponents(inputPresents),
-                new Discord.ActionRowBuilder().addComponents(inputZones)
             );
             return await interaction.showModal(modal);
         }
@@ -455,3 +390,7 @@ module.exports = async (bot, interaction) => {
         }
     }
 };
+
+module.exports = handleInteraction;
+module.exports.name = Discord.Events.InteractionCreate;
+module.exports.run = handleInteraction;

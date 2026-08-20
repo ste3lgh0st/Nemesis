@@ -6,6 +6,15 @@ const loadEvents = require("./Loaders/loadEvents.js");
 const config = require("./config");
 const { DefaultExtractors } = require('@discord-player/extractor');
 
+// Serveur HTTP pour maintenir Render actif
+const PORT = process.env.PORT || 10000;
+http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("Bot Nemesis en ligne !");
+}).listen(PORT, () => {
+    console.log(`🟢 Serveur Web en écoute sur le port ${PORT}`);
+});
+
 const bot = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -14,10 +23,8 @@ const bot = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildModeration
-    ],
-    ws: { properties: { os: 'linux' } }
+    ]
 });
-
 
 const player = new Player(bot);
 bot.player = player;
@@ -28,19 +35,11 @@ bot.function = {
     createId: require("./Fonctions/createId"),
 };
 
-process.on("unhandledRejection", (reason, promise) => {
+process.on("unhandledRejection", (reason) => {
     console.error(" [Anti-Crash] Unhandled Rejection:", reason);
 });
-process.on("uncaughtException", (err, origin) => {
+process.on("uncaughtException", (err) => {
     console.error(" [Anti-Crash] Uncaught Exception:", err);
-});
-
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("Bot Nemesis en ligne !");
-}).listen(PORT, () => {
-    console.log(`Serveur HTTP en écoute sur le port ${PORT}`);
 });
 
 async function startBot() {
@@ -48,26 +47,24 @@ async function startBot() {
         console.log("--- DÉMARRAGE DU BOT ---");
         
         await player.extractors.loadMulti(DefaultExtractors);
+        console.log("Extracteurs chargés.");
+        
         await loadCommands(bot);
+        console.log("Commandes chargées.");
+        
         await loadEvents(bot);
+        console.log("Événements chargés.");
 
         const token = process.env.TOKEN || config.token;
-        
-        console.log(`Longueur du token récupéré : ${token ? token.trim().length : 0} caractères`);
+        if (!token) {
+            throw new Error("TOKEN manquant ! Vérifie l'onglet Environment sur Render.");
+        }
 
         console.log("Connexion à Discord en cours...");
-        
-        const loginPromise = bot.login(token ? token.trim() : "");
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Délai dépassé (Timeout 15s) : Discord ne répond pas !")), 15000)
-        );
-
-        await Promise.race([loginPromise, timeoutPromise]);
+        await bot.login(token.trim());
         console.log("🟢 Connexion à Discord réussie !");
-
     } catch (err) {
-        console.error("🔴 ERREUR DE CONNEXION :", err.message);
-        console.error(err);
+        console.error("🔴 ERREUR CRITIQUE AU LANCEMENT :", err);
     }
 }
 
