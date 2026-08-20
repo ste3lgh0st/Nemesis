@@ -1,6 +1,5 @@
 const Discord = require("discord.js");
 const cron = require("node-cron");
-const loadSlashCommands = require("../Loaders/loadSlashCommands");
 
 module.exports = {
     name: Discord.Events.ClientReady,
@@ -13,7 +12,14 @@ module.exports = {
             lead: {}
         };
 
-        await loadSlashCommands(bot);
+        try {
+            const loadSlashCommands = require("../Loaders/loadSlashCommands.js");
+            if (typeof loadSlashCommands === "function") {
+                await loadSlashCommands(bot);
+            }
+        } catch (e) {
+            console.warn("⚠️ Loader loadSlashCommands non trouvé ou ignoré (enregistré dans main.js).");
+        }
 
         bot.autoMsgEnabled = true;
 
@@ -25,7 +31,7 @@ module.exports = {
             try {
                 const channel = await bot.channels.fetch(CHANNEL_ID);
                 if (channel) {
-                    const messageTexte = `Bonjour <@&1472563147834392718>,\n\nLe conseil aura lieu à **21h00.** \n\nToute personne **présente** au conseil devra rester disponible pour prendre son service à son issue.\nIl est **inutile** d'y assister si vous n'avez pas l'intention de rester en service par la suite.\nLes consignes de la soirée y seront transmises.\n\nFréquence radio actuelle : **11.44**`;
+                    const messageTexte = `Bonjour <@&1472563147834392718>,\n\nLe conseil aura lieu à **21h00.** \n\nToute personne **présente** au conseil devra rester disponible suite à celui-ci.\nIl est **inutile** d'y assister si vous n'avez pas l'intention de rester par la suite.\nLes informations de la soirée y seront partagées. Si vous en avez, vous êtes évidemment autorisés, __sans couper la parole de quiconque__, à tenir informer les membres présent au conseil de votre information. \n\nFréquence radio actuelle : **11.44**`;
 
                     await channel.send({ content: messageTexte });
                 }
