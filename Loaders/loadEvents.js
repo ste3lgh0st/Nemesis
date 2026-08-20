@@ -8,7 +8,7 @@ module.exports = async (bot) => {
         const eventName = event.name || file.replace(".js", "");
 
         if (typeof event === "function") {
-            bot.on(eventName, event.bind(null, bot));
+            bot.on(eventName, (...args) => event(bot, ...args));
         } else if (event && typeof event.run === "function") {
             if (event.once) {
                 bot.once(eventName, (...args) => event.run(bot, ...args));
@@ -17,6 +17,6 @@ module.exports = async (bot) => {
             }
         }
 
-        console.log(`Événement ${file} chargé avec succès`);
+        console.log(`Événement ${file} (${eventName}) chargé avec succès`);
     }
 };

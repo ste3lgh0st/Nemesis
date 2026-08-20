@@ -36,10 +36,6 @@ function saveInventory(data) {
 }
 
 const handleInteraction = async (bot, interaction) => {
-
-    // ==========================================
-    // 1. GESTION DES COMMANDES SLASH
-    // ==========================================
     if (interaction.isChatInputCommand() || interaction.type === Discord.InteractionType.ApplicationCommand) {
         const command = bot.commands.get(interaction.commandName);
         if (command) {
@@ -70,14 +66,14 @@ const handleInteraction = async (bot, interaction) => {
             const inputMembre = new Discord.TextInputBuilder()
                 .setCustomId("input_membre")
                 .setLabel("Membre visé (Mention ou ID)")
-                .setPlaceholder("Ex: @Nom ou 123456789012345678")
+                .setPlaceholder("Ex: @Nom ou ID")
                 .setStyle(Discord.TextInputStyle.Short)
                 .setRequired(true);
 
             const inputMotif = new Discord.TextInputBuilder()
                 .setCustomId("input_motif")
                 .setLabel("Motif de l'avertissement")
-                .setPlaceholder("Indiquez la raison exacte...")
+                .setPlaceholder("Indiquez la raison exacte")
                 .setStyle(Discord.TextInputStyle.Paragraph)
                 .setRequired(true);
 
@@ -318,25 +314,6 @@ const handleInteraction = async (bot, interaction) => {
             const motif = interaction.fields.getTextInputValue("input_motif");
 
             const template = `# DÉCLARATION D'ABSENCE\n\n**Membre :** ${interaction.user}\n**Période :** Du ${debut} au ${fin}\n\n**Motif :**\n${motif}`;
-            return await interaction.reply({ content: template });
-        }
-
-        // --- PATROUILLE ---
-        if (interaction.customId === "modal_patrouille") {
-            const equipage = interaction.fields.getTextInputValue("input_equipage");
-            const vehicule = interaction.fields.getTextInputValue("input_vehicule");
-            const heure = interaction.fields.getTextInputValue("input_heure");
-
-            const template = `# PRISE DE PATROUILLE\n\n**Heure de début :** ${heure}\n**Équipage :** ${equipage}\n**Véhicule :** ${vehicule}\n\n*Patrouille en cours sur le secteur.*`;
-            return await interaction.reply({ content: template });
-        }
-
-        // --- RONDE VILLA ---
-        if (interaction.customId === "modal_ronde") {
-            const presents = interaction.fields.getTextInputValue("input_presents");
-            const zones = interaction.fields.getTextInputValue("input_zones");
-
-            const template = `# PRISE DE RONDE - VILLA\n\n**Membres en ronde :** ${presents}\n**Zones contrôlées :**\n${zones}\n\n*Sécurité de la Villa assurée.*`;
             return await interaction.reply({ content: template });
         }
 

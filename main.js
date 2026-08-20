@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection } = require("discord.js");
+const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
 const { Player } = require("discord-player");
 const http = require("http");
 const loadCommands = require("./Loaders/loadCommands.js");
@@ -6,7 +6,6 @@ const loadEvents = require("./Loaders/loadEvents.js");
 const config = require("./config");
 const { DefaultExtractors } = require('@discord-player/extractor');
 
-// Serveur HTTP pour maintenir Render actif
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "text/plain" });
@@ -63,6 +62,19 @@ async function startBot() {
         console.log("Connexion à Discord en cours...");
         await bot.login(token.trim());
         console.log("🟢 Connexion à Discord réussie !");
+
+        if (bot.commands.size > 0) {
+            const rest = new REST({ version: "10" }).setToken(token.trim());
+            const commandsData = bot.commands.map(cmd => cmd.slash ? cmd.slash.toJSON() : cmd);
+            
+            console.log("Enregistrement des commandes Slash auprès de Discord...");
+            await rest.put(
+                Routes.applicationCommands(bot.user.id),
+                { body: commandsData }
+            );
+            console.log("✅ Commandes Slash enregistrées avec succès !");
+        }
+
     } catch (err) {
         console.error("🔴 ERREUR CRITIQUE AU LANCEMENT :", err);
     }
